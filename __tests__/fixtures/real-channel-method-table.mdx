@@ -1,0 +1,4 @@
+| Implementation method | Method name | Service page retention | Result check |
+| --- | --- | --- | --- |
+| [Channel Simple Add (Recommended)](#channel-follow) | `followChannel()` | **Directly displays the channel add screen** within the service page | **Result can be checked in the response** of the request |
+| [Channel Add](#channel-add) | `addChannel()` | Redirects to the channel page in Messenger via a connection page, and adds the channel **after leaving the service page with user consent** | Requires a separate check via [Retrieve Channel relationship](#status-check-relationship) request |

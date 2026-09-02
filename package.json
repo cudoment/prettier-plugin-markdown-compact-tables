@@ -1,0 +1,51 @@
+{
+  "name": "prettier-plugin-markdown-compact-tables",
+  "version": "1.0.0",
+  "description": "Prettier plugin that keeps Markdown/MDX tables compact and preserves risky MDX/JSX regions.",
+  "keywords": [
+    "prettier",
+    "prettier-plugin",
+    "markdown",
+    "mdx",
+    "table",
+    "formatter"
+  ],
+  "homepage": "https://github.com/cspidar/prettier-plugin-markdown-compact-tables#readme",
+  "bugs": {
+    "url": "https://github.com/cspidar/prettier-plugin-markdown-compact-tables/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cspidar/prettier-plugin-markdown-compact-tables.git"
+  },
+  "license": "MIT",
+  "author": "cspidar",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "README.ko.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "peerDependencies": {
+    "prettier": ">=3.5.3 <3.9.0"
+  },
+  "devDependencies": {
+    "@mdx-js/mdx": "^3.1.0",
+    "prettier": "~3.8.1",
+    "vitest": "^3.2.7"
+  }
+}

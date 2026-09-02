@@ -1,0 +1,24 @@
+{
+  "semi": false,
+  "singleQuote": false,
+  "trailingComma": "es5",
+  "plugins": ["./index.js"],
+  "overrides": [
+    {
+      "files": "*.md",
+      "options": {
+        "parser": "markdown",
+        "printWidth": 99999,
+        "proseWrap": "never"
+      }
+    },
+    {
+      "files": "*.mdx",
+      "options": {
+        "parser": "mdx",
+        "printWidth": 99999,
+        "proseWrap": "never"
+      }
+    }
+  ]
+}

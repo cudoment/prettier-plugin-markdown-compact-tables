@@ -1,0 +1,8 @@
+| Error Code | Status Code | Cause | Solution |
+| --- | --- | --- | --- |
+| `-1` | `400` | If an error occurs while the server is internally processing. | Retry. |
+| `-2` | `400` | If some required parameters are not included, or if the argument value has the wrong data type or is out of the acceptable range. | Check the request parameters. |
+| `-3` | `403` | If the required feature activation (simple sign-up, consent items, service settings, etc.) is not completed or the allow call is not enabled in the [Available APIs](../app-setting/app#admin-key-api) for using this API. | After completing the required settings in the [app management page](https://developers.example.com/console/app), request again. |
+| `-4` | `403` | If an account has been blocked or restricted to do some actions. | - |
+| `-5` | `403` | If the app has no permission to request the API. | Request a review to use the API, and then make a request again. |
+| `-6` | `400` | If a request for an action is not allowed by the platform services. | Refer to the API documentation and request for an action within the allowed range. |
