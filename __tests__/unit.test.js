@@ -284,4 +284,53 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(withPlugin.trim()).toBe(input)
     })
   })
+
+  // Prettier 3.9 reports tableCell positions with the surrounding pipes
+  // included, so unwrapping the raw slice has to survive escaped pipes and
+  // escaped backslashes at the cell boundary.
+  describe("셀 구분자 처리", () => {
+    it("셀마다 파이프를 하나씩만 출력한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | 2 |"
+      )
+
+      expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+
+    it("이스케이프된 파이프로 끝나는 셀을 보존한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | b\\| |"
+      )
+
+      expect(result).toContain("| 1 | b\\| |")
+    })
+
+    it("이스케이프된 백슬래시 뒤의 닫는 파이프는 구분자로 처리한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | b\\\\|"
+      )
+
+      expect(result).toContain("| 1 | b\\\\ |")
+    })
+
+    it("셀이 이스케이프된 파이프 하나뿐이어도 보존한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| \\| | \\| |"
+      )
+
+      expect(result).toContain("| \\| | \\| |")
+    })
+
+    it("바깥 파이프가 없는 표도 압축한다", async () => {
+      const result = await formatWithPlugin("A | B\n--- | ---\n1 | 2")
+
+      expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+
+    it("파이프에 공백이 없는 표도 압축한다", async () => {
+      const result = await formatWithPlugin("|A|B|\n|---|---|\n|1|2|")
+
+      expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+  })
 })

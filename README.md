@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5 ~ 3.8](https://img.shields.io/badge/prettier-3.5%20~%203.8-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5+](https://img.shields.io/badge/prettier-3.5%2B-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 **English** | [한국어](./README.ko.md)
 
@@ -83,9 +83,9 @@ It also affects review. Adding one sentence to the `send_mode` description recom
 | Item | Version |
 | --- | --- |
 | Node.js | 18 or later |
-| Prettier | >= 3.5.3 and < 3.9.0 |
+| Prettier | 3.5.3 or later |
 
-Prettier 3.9 and later print tables incorrectly with this plugin. See [Compatibility](#compatibility).
+Every Prettier 3 release from 3.5.3 onward is covered by the test suite. See [Compatibility](#compatibility).
 
 ## Installation
 
@@ -277,10 +277,9 @@ npx prettier --write "**/*.md" --compact-tables-replacements "Javascript=>JavaSc
 
 | Prettier | Status |
 | --- | --- |
-| 3.5.3 ~ 3.8.x | Supported. All 73 tests pass |
-| 3.9.0 and later | Not supported. Table output is malformed |
+| 3.5.3 ~ 3.9.x | Supported. All 79 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
 
-`peerDependencies` is declared as `>=3.5.3 <3.9.0`, so package managers warn about an unsupported combination.
+Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes, which the plugin accounts for. The two versions produce byte-identical output: formatting a corpus of 517 real documents with 3.8.1 and with 3.9.6 gives the same result for every file.
 
 Both of Prettier's built-in parsers, `markdown` and `mdx`, are supported. The plugin wraps the printer of the built-in Markdown plugin, so anything unrelated to tables follows Prettier's default behavior.
 

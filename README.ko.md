@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5 ~ 3.8](https://img.shields.io/badge/prettier-3.5%20~%203.8-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5+](https://img.shields.io/badge/prettier-3.5%2B-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 [English](./README.md) | **한국어**
 
@@ -83,9 +83,9 @@ Prettier의 기본 마크다운 프린터는 표가 `printWidth` 안에 들어�
 | 항목 | 버전 |
 | --- | --- |
 | Node.js | 18 이상 |
-| Prettier | 3.5.3 이상 3.9.0 미만 |
+| Prettier | 3.5.3 이상 |
 
-Prettier 3.9부터는 표 출력이 어긋납니다. 자세한 내용은 [호환성](#호환성)에 있습니다.
+3.5.3 이후의 Prettier 3 버전은 모두 테스트로 확인했습니다. 자세한 내용은 [호환성](#호환성)에 있습니다.
 
 ## 설치
 
@@ -277,10 +277,9 @@ npx prettier --write "**/*.md" --compact-tables-replacements "메세지=>메시�
 
 | Prettier | 상태 |
 | --- | --- |
-| 3.5.3 ~ 3.8.x | 지원합니다. 테스트 73건이 모두 통과합니다 |
-| 3.9.0 이상 | 지원하지 않습니다. 표 출력이 어긋납니다 |
+| 3.5.3 ~ 3.9.x | 지원합니다. 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0, 3.9.6에서 테스트 79건이 모두 통과합니다 |
 
-`peerDependencies`가 `>=3.5.3 <3.9.0`으로 지정되어 있으므로, 패키지 매니저가 지원하지 않는 조합을 경고합니다.
+Prettier 3.9에서 `tableCell`의 위치 정보가 파이프를 포함하도록 바뀌었으며, 플러그인이 이를 처리합니다. 두 버전의 출력은 완전히 같습니다. 실제 문서 517건을 3.8.1과 3.9.6으로 각각 포맷했을 때 모든 파일의 결과가 일치했습니다.
 
 파서는 Prettier에 내장된 `markdown`과 `mdx`를 모두 지원합니다. 이 플러그인은 내장 마크다운 플러그인의 프린터를 감싸는 방식으로 동작하므로, 표와 관련되지 않은 출력은 Prettier의 기본 동작을 그대로 따릅니다.
 

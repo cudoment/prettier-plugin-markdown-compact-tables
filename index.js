@@ -456,6 +456,30 @@ const parsers = Object.fromEntries(
   ])
 )
 
+// A trailing pipe closes the cell only when it is not escaped. The backslashes
+// in front of it escape each other in pairs, so an even count leaves the pipe
+// itself unescaped.
+const endsWithUnescapedPipe = (text) => {
+  if (!text.endsWith("|")) return false
+
+  let backslashes = 0
+  for (let i = text.length - 2; i >= 0 && text[i] === "\\"; i -= 1) {
+    backslashes += 1
+  }
+  return backslashes % 2 === 0
+}
+
+// Prettier 3.9 changed tableCell positions to cover the surrounding pipes
+// (`| A ` instead of `A`), so the raw slice is unwrapped before it is
+// normalized. On 3.5 through 3.8 a cell slice never starts or ends with an
+// unescaped pipe, which makes this a no-op there.
+const unwrapTableCellRaw = (raw) => {
+  let out = raw
+  if (out.startsWith("|")) out = out.slice(1)
+  if (endsWithUnescapedPipe(out)) out = out.slice(0, -1)
+  return out.trim()
+}
+
 function compactTablesPrint(path, options, print) {
   const node = path.getValue()
   const replacements = getOptionReplacements(options)
@@ -501,7 +525,9 @@ function compactTablesPrint(path, options, print) {
     node.position?.end?.offset != null
   ) {
     const { start, end } = node.position
-    const raw = options.originalText.slice(start.offset, end.offset)
+    const raw = unwrapTableCellRaw(
+      options.originalText.slice(start.offset, end.offset)
+    )
     return normalizeText(raw, {
       applyBr: true,
       collapseMultipleSpaces: true,
