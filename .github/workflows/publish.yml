@@ -34,7 +34,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   publish:
-    name: Publish v${{ needs.check.outputs.version }}
+    name: Publish to npm
     needs: check
     if: needs.check.outputs.publish == 'true'
     runs-on: ubuntu-latest
