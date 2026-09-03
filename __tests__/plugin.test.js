@@ -410,9 +410,114 @@ describe("prettier-plugin-markdown-compact-tables", () => {
 
       expect(result.trim()).toBe(input)
     })
+
+    // The markdown parser reports raw HTML as an `html` node while the mdx
+    // parser reports the same text as a `jsx` node, so each parser reaches a
+    // different branch of the printer and both need covering.
+    it("keeps an HTML table through either parser", async () => {
+      const input = "<table><tr><td>a  b</td></tr></table>"
+
+      for (const parser of ["markdown", "mdx"]) {
+        const result = await formatWithPlugin(input, parser)
+        expect(result.trim()).toBe(input)
+      }
+    })
   })
 
-  describe("8. tables taken from real documents", () => {
+  describe("8. the same document through either parser", () => {
+    // Content that is valid Markdown and valid MDX has to print the same way.
+    const shared = [
+      ["plain table", "| A  | B |\n| --- | --- |\n| 1 | 2 |"],
+      [
+        "table with inline markup",
+        "| A | B |\n| --- | --- |\n| **b** | `c  d` |",
+      ],
+      ["alignment markers", "| A | B |\n| :-- | --: |\n| 1 | 2 |"],
+      ["table without outer pipes", "A | B\n--- | ---\n1 | 2"],
+      ["row with too few cells", "| A | B |\n| --- | --- |\n| 1 |"],
+      ["pipe lines with no delimiter row", "| A | B |\n| 1 | 2 |"],
+      [
+        "table in a list item",
+        "- x\n\n  | A  | B |\n  | --- | --- |\n  | 1 | 2 |",
+      ],
+      ["table in a blockquote", "> | A  | B |\n> | --- | --- |\n> | 1 | 2 |"],
+      [
+        "heading and paragraph around a table",
+        "# T\n\ntext\n\n| A  | B |\n| --- | --- |\n| 1 | 2 |",
+      ],
+      [
+        "inline HTML in a cell",
+        "| A | B |\n| --- | --- |\n| <span>x  y</span> | c |",
+      ],
+    ]
+
+    shared.forEach(([name, input]) => {
+      it(name, async () => {
+        const asMarkdown = await formatWithPlugin(input, "markdown")
+        const asMdx = await formatWithPlugin(input, "mdx")
+
+        expect(asMarkdown).toBe(asMdx)
+      })
+    })
+
+    // An MDX comment is `paragraph` plus `text` to the markdown parser and
+    // `paragraph` plus `esComment` to the mdx parser, so a `.md` file holding
+    // comment syntax takes a route the mdx tests never reach.
+    it("keeps MDX comment syntax in a markdown file", async () => {
+      const input = "text\n\n{/* a comment */}\n\nmore"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result).toContain("{/* a comment */}")
+      expect(result).not.toContain("<!--")
+      await expectIdempotent(input, "markdown")
+    })
+
+    it("keeps a commented-out table row in a markdown file", async () => {
+      const input = [
+        "| Category | API |",
+        "| --- | --- |",
+        "{/* | Channel message | [Send](/docs/send) | */}",
+      ].join("\n")
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result).toContain(
+        "{/* | Channel message | [Send](/docs/send) | */}"
+      )
+      expect(result).not.toContain("| {/*")
+      await expectIdempotent(input, "markdown")
+    })
+
+    it("keeps a whole commented table in a markdown file", async () => {
+      const input = [
+        "{/* ## Batch",
+        "",
+        "| Category | API |",
+        "| --- | --- |",
+        "| Batch | [Broadcast](/docs/broadcast) | */}",
+      ].join("\n")
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result).not.toContain("*/} |")
+      expect(result.trim()).toBe(input)
+      await expectIdempotent(input, "markdown")
+    })
+
+    it("repairs a stray pipe after a comment close in a markdown file", async () => {
+      const rows = [
+        "{/* ## Batch",
+        "",
+        "| Category | API |",
+        "| --- | --- |",
+        "| Batch | [Broadcast](/docs/broadcast) | */}",
+      ]
+      const result = await formatWithPlugin(rows.join("\n") + " |", "markdown")
+
+      expect(result).not.toContain("*/} |")
+      expect(result.trim()).toBe(rows.join("\n"))
+    })
+  })
+
+  describe("9. tables taken from real documents", () => {
     const fixtures = [
       {
         name: "error code table keeps its links and long cells",
@@ -462,6 +567,20 @@ describe("prettier-plugin-markdown-compact-tables", () => {
       it(`${fixture.name}, formatted twice`, async () => {
         await expectIdempotent(readFixture(fixture.filename), "mdx")
       })
+
+      // These fixtures carry no JSX, so the same text is a valid `.md` file.
+      // The two parsers build different trees for inline HTML and for MDX
+      // comment syntax, so identical output is a contract worth asserting
+      // rather than a coincidence to rely on.
+      it(`${fixture.name}, through the markdown parser`, async () => {
+        const input = readFixture(fixture.filename)
+        const asMarkdown = await formatWithPlugin(input, "markdown")
+        const asMdx = await formatWithPlugin(input, "mdx")
+
+        expect(asMarkdown.trim()).toBe(input.trim())
+        expect(asMarkdown).toBe(asMdx)
+        await expectIdempotent(input, "markdown")
+      })
     })
 
     it("keeps asterisks that the built-in printer escapes", async () => {
@@ -479,7 +598,7 @@ describe("prettier-plugin-markdown-compact-tables", () => {
     })
   })
 
-  describe("9. MDX taken from real documents", () => {
+  describe("10. MDX taken from real documents", () => {
     it("keeps a commented-out JSX block as written", async () => {
       const input = readFixture("commented-jsx-table.mdx")
       const result = await formatWithPlugin(input, "mdx")

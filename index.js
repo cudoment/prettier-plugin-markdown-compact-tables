@@ -15,6 +15,14 @@ const createPlaceholderPrefix = (input) => {
   return prefix
 }
 
+// `String.prototype.replaceAll` reads `$&`, `` $` ``, `$'` and `$$` in the
+// replacement as substitution patterns, even when the pattern it searches for
+// is a plain string. The caller below puts back the source of a protected
+// region, which is text an author wrote, so a `$` in it has to land verbatim.
+// `split`/`join` is what guarantees that. Do not "simplify" this to
+// `replaceAll`.
+const replaceAllLiteral = (text, token, value) => text.split(token).join(value)
+
 const replaceCodeSpans = (input, replace) => {
   let result = ""
   let i = 0
@@ -202,7 +210,7 @@ const collapseSpaceRuns = (str) => {
   let result = processedText
   for (let i = placeholders.length - 1; i >= 0; i--) {
     const { token, value } = placeholders[i]
-    result = result.replaceAll(token, value)
+    result = replaceAllLiteral(result, token, value)
   }
 
   return result

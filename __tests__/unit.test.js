@@ -166,6 +166,38 @@ describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
       expectNoLeakedPlaceholder(result)
     })
 
+    // Restoring a protected region puts an author's text back. If that text
+    // holds what a regular expression replacement reads as a substitution
+    // pattern, the restore has to stay literal or the region is rewritten and
+    // the internal token leaks out.
+    const substitutionPatterns = [
+      ["whole match", "$&"],
+      ["doubled dollar", "$$"],
+      ["preceding portion", "$`"],
+      ["following portion", "$'"],
+      ["numbered group", "$1"],
+    ]
+
+    substitutionPatterns.forEach(([name, pattern]) => {
+      it(`keeps ${name} (${pattern}) inside a code span`, async () => {
+        const result = await formatWithPlugin(
+          `| A | B |\n| --- | --- |\n| \`\`a  ${pattern}b\`\` | c |`
+        )
+
+        expect(result).toContain(`\`\`a  ${pattern}b\`\``)
+        expectNoLeakedPlaceholder(result)
+      })
+
+      it(`keeps ${name} (${pattern}) inside an HTML attribute`, async () => {
+        const result = await formatWithPlugin(
+          `| A | B |\n| --- | --- |\n| <span data="${pattern}">x  y</span> | c |`
+        )
+
+        expect(result).toContain(`data="${pattern}"`)
+        expectNoLeakedPlaceholder(result)
+      })
+    })
+
     it("survives a document that already contains the internal token", async () => {
       // The placeholder prefix is regenerated until it is absent from the
       // input, so a document mentioning it must still round-trip.
