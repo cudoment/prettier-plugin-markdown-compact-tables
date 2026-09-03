@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import prettier from "prettier"
 import { formatWithPlugin } from "./helpers/test-utils.js"
+import { unwrapTableCellRaw } from "../index.js"
 
 describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트", () => {
   describe("정규화 함수 테스트", () => {
@@ -113,6 +113,30 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
 
       expect(result).toContain("`동의 항목`")
       expect(result).toContain("```\n동의 항목\n```")
+    })
+  })
+
+  // 저장소가 쓰는 Prettier 버전은 셀 조각에 파이프를 포함하지 않으므로,
+  // 3.9가 만드는 조각 형태는 헬퍼를 직접 호출해 검증한다.
+  describe("셀 조각 해제", () => {
+    const cases = [
+      ["3.5~3.8 형태의 조각", "A", "A"],
+      ["3.9 첫 셀 조각", "| A ", "A"],
+      ["3.9 마지막 셀 조각", "| B |", "B"],
+      ["행 끝 공백이 붙은 조각", "| 2 |   ", "2"],
+      ["행 끝 탭이 붙은 조각", "| 2 |\t", "2"],
+      ["파이프 하나뿐인 조각", "|", ""],
+      ["이스케이프된 파이프로 끝나는 셀", "| b\\| ", "b\\|"],
+      ["이스케이프된 백슬래시 뒤 구분자", "| b\\\\ |", "b\\\\"],
+      ["선두 NBSP 보존", "|  x ", " x"],
+      ["선두 전각 공백 보존", "| 　x ", "　x"],
+      ["말미 NBSP 보존", "| x  |", "x "],
+    ]
+
+    cases.forEach(([name, raw, expected]) => {
+      it(name, () => {
+        expect(unwrapTableCellRaw(raw)).toBe(expected)
+      })
     })
   })
 
@@ -319,6 +343,30 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       )
 
       expect(result).toContain("| \\| | \\| |")
+    })
+
+    it("행 끝 공백이 있어도 셀 구분자를 정리한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | 2 |   "
+      )
+
+      expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+
+    it("헤더 끝 공백이 있어도 표 구조를 유지한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |  \n| --- | --- |\n| 1 | 2 |"
+      )
+
+      expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+
+    it("셀 선두의 유니코드 공백은 보존한다", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n|  x | 　y |"
+      )
+
+      expect(result).toContain("|  x | 　y |")
     })
 
     it("바깥 파이프가 없는 표도 압축한다", async () => {

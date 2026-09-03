@@ -186,6 +186,7 @@ Table compaction has no option of its own: registering the plugin turns it on.
 | --- | --- |
 | Spaces around pipes | Fixed at one space; no padding is added to match column widths |
 | Repeated spaces inside a cell | Collapsed to a single space |
+| Unicode spaces in a cell | NBSP and ideographic space are content, so they are kept as written |
 | Trailing space in a cell | Removed |
 | Alignment markers | `:--`, `:-:` and `--:` are preserved as written |
 | Line-break tags inside a cell | Normalized to `<br />` regardless of how they were written |
@@ -277,7 +278,7 @@ npx prettier --write "**/*.md" --compact-tables-replacements "Javascript=>JavaSc
 
 | Prettier | Status |
 | --- | --- |
-| 3.5.3 ~ 3.9.x | Supported. All 79 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
+| 3.5.3 ~ 3.9.x | Supported. All 93 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
 
 Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes, which the plugin accounts for. The two versions produce byte-identical output: formatting a corpus of 517 real documents with 3.8.1 and with 3.9.6 gives the same result for every file.
 

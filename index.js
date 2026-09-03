@@ -469,15 +469,25 @@ const endsWithUnescapedPipe = (text) => {
   return backslashes % 2 === 0
 }
 
+// Only ASCII spacing separates a cell from its pipes. Unicode spaces such as
+// NBSP or U+3000 are cell content, so `String.prototype.trim` must not be used
+// here: it would drop them.
+const trimAsciiSpace = (text) =>
+  text.replace(/^[\t\n\v\f\r ]+/, "").replace(/[\t\n\v\f\r ]+$/, "")
+
 // Prettier 3.9 changed tableCell positions to cover the surrounding pipes
 // (`| A ` instead of `A`), so the raw slice is unwrapped before it is
 // normalized. On 3.5 through 3.8 a cell slice never starts or ends with an
-// unescaped pipe, which makes this a no-op there.
-const unwrapTableCellRaw = (raw) => {
-  let out = raw
+// unescaped pipe, which makes this a no-op there. Exported for tests: the
+// repository runs on a Prettier version that never produces the wrapped shape.
+export const unwrapTableCellRaw = (raw) => {
+  // The last cell of a row also carries whatever follows the closing pipe, so
+  // the edges are trimmed first. Otherwise trailing spaces or tabs hide the
+  // closing pipe and it survives as cell content.
+  let out = trimAsciiSpace(raw)
   if (out.startsWith("|")) out = out.slice(1)
   if (endsWithUnescapedPipe(out)) out = out.slice(0, -1)
-  return out.trim()
+  return trimAsciiSpace(out)
 }
 
 function compactTablesPrint(path, options, print) {
