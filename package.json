@@ -1,7 +1,7 @@
 {
   "name": "prettier-plugin-markdown-compact-tables",
   "version": "1.0.0",
-  "description": "Prettier plugin that keeps Markdown/MDX tables compact and preserves risky MDX/JSX regions.",
+  "description": "Prettier plugin that prints Markdown and MDX tables in a compact form, without alignment padding.",
   "keywords": [
     "prettier",
     "prettier-plugin",
@@ -38,10 +38,11 @@
     "test": "vitest",
     "test:run": "vitest run",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run format:check && npm run test:run"
   },
   "peerDependencies": {
-    "prettier": "^3.5.3"
+    "prettier": "^3.0.0"
   },
   "devDependencies": {
     "@mdx-js/mdx": "^3.1.0",
