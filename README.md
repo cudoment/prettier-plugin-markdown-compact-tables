@@ -4,10 +4,9 @@
 
 **English** | [한국어](./README.ko.md)
 
-A [Prettier](https://prettier.io) plugin that prints Markdown and MDX tables in a compact form, without alignment padding. It hooks into Prettier 3's `markdown` and `mdx` parsers and does two things.
+A [Prettier](https://prettier.io) plugin that prints Markdown and MDX tables in a compact form, without alignment padding. It hooks into Prettier 3's `markdown` and `mdx` parsers.
 
-- **Compact tables**: pipes are surrounded by exactly one space, and cells are never padded to match column widths.
-- **Text replacements**: register the spellings and notations you want fixed, as literal strings or regular expressions, and they are applied on save.
+Pipes are surrounded by exactly one space, and cells are never padded to match column widths.
 
 ## Contents
 
@@ -17,8 +16,7 @@ A [Prettier](https://prettier.io) plugin that prints Markdown and MDX tables in 
 - [Configuration](#configuration)
 - [Running it](#running-it)
 - [Table compaction](#table-compaction)
-- [Text replacements](#text-replacements)
-- [Options](#options)
+- [Companion plugin](#companion-plugin)
 - [Compatibility](#compatibility)
 - [Development](#development)
 - [License](#license)
@@ -137,7 +135,6 @@ The plugin compacts tables regardless of `printWidth`, so you never have to tune
 ```json
 {
   "plugins": ["prettier-plugin-markdown-compact-tables"],
-  "compactTablesReplacements": ["Javascript=>JavaScript", "Github=>GitHub"],
   "overrides": [
     {
       "files": "*.md",
@@ -156,7 +153,6 @@ The plugin compacts tables regardless of `printWidth`, so you never have to tune
 ```json
 {
   "plugins": ["prettier-plugin-markdown-compact-tables"],
-  "compactTablesReplacements": ["Javascript=>JavaScript", "Github=>GitHub"],
   "overrides": [
     {
       "files": "*.mdx",
@@ -170,7 +166,7 @@ The plugin compacts tables regardless of `printWidth`, so you never have to tune
 }
 ```
 
-A project that carries both formats lists both entries in `overrides`. `compactTablesReplacements` sits outside `overrides`, so a single list of rules covers every document.
+A project that carries both formats lists both entries in `overrides`.
 
 ## Running it
 
@@ -209,7 +205,7 @@ Table compaction has no option of its own: registering the plugin turns it on.
 | Trailing space in a cell | Removed |
 | Alignment markers | `:--`, `:-:` and `--:` are preserved as written |
 
-Line-break tags are not rewritten here. Unifying `<br>`, `<br/>` and `<BR>` into a single spelling is a replacement rule you register, described in [Unifying line-break tags](#unifying-line-break-tags).
+Line-break tags and the wording inside a cell are left as written. Correcting those is a separate concern, handled by the [companion plugin](#companion-plugin).
 
 ### What is left untouched
 
@@ -221,105 +217,26 @@ Preserving the source beats correcting it automatically and breaking the table s
 - tables inside an MDX comment, `{/* ... */}`
 - MDX/JSX elements that contain a fenced code block
 
-## Text replacements
+## Companion plugin
 
-Register the spellings you keep getting wrong in `compactTablesReplacements` and they are corrected on save. The default is empty, so nothing is replaced until you add a rule.
+This plugin only decides how a table is printed. It never rewrites the words inside a cell.
 
-**Configuration**
+Correcting spellings, or unifying a notation such as `<br>` versus `<br />`, is what [`prettier-plugin-markdown-replacements`](https://github.com/cspidar/prettier-plugin-markdown-replacements) is for. The two are independent: either works on its own, and they can be used together.
 
-<!-- prettier-ignore -->
+Prettier resolves one parser per language, and both plugins contribute one, so **the replacements plugin has to be listed last.** Listed first, its rules are silently skipped.
+
 ```json
 {
-  "compactTablesReplacements": ["Javascript=>JavaScript", "Github=>GitHub"]
+  "plugins": ["prettier-plugin-markdown-compact-tables", "prettier-plugin-markdown-replacements"],
+  "markdownReplacements": ["Javascript=>JavaScript"]
 }
-```
-
-**Before**
-
-<!-- prettier-ignore -->
-```md
-Send a Javascript request from Github.
-
-| Field | Description |
-| --- | --- |
-| `Javascript` | Javascript runtime |
-```
-
-**After**
-
-<!-- prettier-ignore -->
-```md
-Send a JavaScript request from GitHub.
-
-| Field | Description |
-| --- | --- |
-| `Javascript` | JavaScript runtime |
-```
-
-Prose in the body and in table cells is corrected, while anything wrapped in code markup keeps its original spelling.
-
-### Rule formats
-
-| Format | Example | Behavior |
-| --- | --- | --- |
-| Literal | `Javascript=>JavaScript` | Compared as a plain string and replaced at every occurrence |
-| Regular expression | `/Max ([0-9]+)/g=>Maximum: $1` | Written as `/pattern/flags`, with capture references such as `$1` available |
-
-With the regular expression above, `Max 50` becomes `Maximum: 50`. The `g` flag is added automatically when omitted, so every occurrence is replaced.
-
-### Unifying line-break tags
-
-Line-break tags used to be normalized by the plugin itself. That behavior is a replacement rule now, so a project that has settled on a different spelling is not overruled.
-
-<!-- prettier-ignore -->
-```json
-{
-  "compactTablesReplacements": ["/<br\\s*\\/?>/gi=><br />"]
-}
-```
-
-With that rule `<br>`, `<br/>`, `<BR>` and `<br >` all become `<br />`. To drop the spaces around the tag as well, widen the pattern.
-
-<!-- prettier-ignore -->
-```json
-{
-  "compactTablesReplacements": ["/\\s*<br\\s*\\/?>\\s*/gi=><br />"]
-}
-```
-
-`line one <br /> line two` then becomes `line one<br />line two`. Replacements run per paragraph and per cell, so the blank line between two paragraphs is never swallowed.
-
-### Notes for both formats
-
-- Inline code, code blocks and MDX comments are never replaced. Wrap a string that must survive verbatim, such as a value an API really returns, in code markup and it is protected.
-- Nothing is trimmed, so leading and trailing spaces are part of the rule.
-- In a JSON configuration file every backslash in the pattern is written twice, because JSON uses the backslash as an escape character itself. The rule `/<br\s*\/?>/gi=><br />` is stored as `"/<br\\s*\\/?>/gi=><br />"`.
-- The separator is the first `=>` in a literal rule, and the `=>` after the flags in a regular expression rule. The replacement itself may contain `=>`.
-- Rules are applied in array order, and the output of one rule is the input of the next.
-- An entry without a separator, with an empty left side, or with an invalid regular expression is ignored. An entry that starts with `/` but is not a valid regular expression is treated as a literal rule, so a path rewrite such as `/docs/guide=>/docs/tutorial` works as expected.
-- Regular expressions run per paragraph and per cell, so keep them narrow. A broad pattern such as `/[A-Za-z_]+/` would also match the internal placeholders used to protect code, so replacement is skipped for that paragraph.
-
-### Always applied
-
-Independently of the option, an escaped bracket `\[` is turned back into `[`. This correction also skips inline code, code blocks and MDX comments.
-
-## Options
-
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `compactTablesReplacements` | `string[]` | `[]` | Text replacements applied outside code spans, code blocks and MDX comments. Use `"from=>to"` for a literal rule or `"/pattern/flags=>to"` for a regular expression |
-
-It is available on the command line as well.
-
-```sh
-npx prettier --write "**/*.md" --compact-tables-replacements "Javascript=>JavaScript"
 ```
 
 ## Compatibility
 
 | Prettier | Status |
 | --- | --- |
-| 3.5.3 ~ 3.9.x | Supported. All 96 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
+| 3.5.3 ~ 3.9.x | Supported. All 67 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
 
 Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes, which the plugin accounts for. The two versions produce byte-identical output: formatting a corpus of 517 real documents with 3.8.1 and with 3.9.6 gives the same result for every file.
 

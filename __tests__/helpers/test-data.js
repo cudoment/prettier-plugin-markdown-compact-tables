@@ -1,23 +1,3 @@
-// BR 태그 정규화 테스트 케이스
-export const brTagTestCases = [
-  {
-    name: "기본 <br> 태그",
-    input: "첫 줄<br>둘째 줄",
-    expected: "첫 줄<br />둘째 줄",
-  },
-  {
-    name: "자체 닫는 태그",
-    input: "첫 줄<br/>둘째 줄",
-    expected: "첫 줄<br />둘째 줄",
-  },
-  { name: "공백이 있는 태그", input: "줄1<br >줄2", expected: "줄1<br />줄2" },
-  {
-    name: "대소문자 혼합",
-    input: "줄1<BR>줄2<Br/>줄3",
-    expected: "줄1<br />줄2<br />줄3",
-  },
-]
-
 // 테이블 포맷팅 테스트 케이스
 export const tableTestCases = [
   {
@@ -38,7 +18,7 @@ export const tableTestCases = [
     name: "복잡한 테이블",
     input:
       "| 헤더1 | 헤더2<br/>서브 | 헤더3 |\n| --- | --- | --- |\n| **굵게** | `코드` | [링크](url) |",
-    expected: "| 헤더1 | 헤더2<br />서브 | 헤더3 |",
+    expected: "| 헤더1 | 헤더2<br/>서브 | 헤더3 |",
   },
 ]
 
@@ -89,36 +69,6 @@ export const mdxJsxTestCases = [
   },
 ]
 
-// 단어 보정 옵션 예시 (`.prettierrc`의 `compactTablesReplacements`와 같은 형식)
-export const replacementOptions = {
-  compactTablesReplacements: ["동의 항목=>동의항목"],
-}
-
-// 줄바꿈 태그 표기를 통일하고 앞뒤 공백을 정리하는 규칙.
-// 플러그인 내장 동작이 아니라 설정으로 관리한다.
-export const brRule = "/\\s*<br\\s*\\/?>\\s*/gi=><br />"
-
-export const brOptions = { compactTablesReplacements: [brRule] }
-
-export const brAndWordOptions = {
-  compactTablesReplacements: [brRule, "동의 항목=>동의항목"],
-}
-
-// 텍스트 정규화 테스트 케이스
-export const textNormalizationTestCases = [
-  {
-    name: "옵션으로 등록한 단어 치환",
-    input: "동의 항목을 확인하세요",
-    expected: "동의항목을 확인하세요",
-    options: replacementOptions,
-  },
-  {
-    name: "이스케이프된 대괄호 정규화",
-    input: "\\[예시",
-    expected: "[예시",
-  },
-]
-
 // 통합 테스트 케이스
 export const integrationTestCases = [
   {
@@ -139,7 +89,7 @@ export const integrationTestCases = [
 \`\`\``,
     expectedContains: [
       "| 매개변수 | 타입 | 설명 | 필수 |",
-      "<br />",
+      "<br>",
       "{/* API 호출 예시 */}",
       "```json",
     ],

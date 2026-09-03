@@ -4,7 +4,6 @@ import {
   formatWithPlugin,
   formatWithoutPlugin,
   expectTableStructure,
-  expectBrTagNormalization,
   expectMdxCommentPreservation,
   expectTableAlignment,
   expectIncompletePipeTablePreservation,
@@ -12,50 +11,22 @@ import {
   readFixture,
 } from "./helpers/test-utils.js"
 import {
-  brTagTestCases,
   tableTestCases,
   mdxCommentTestCases,
   incompletePipeTableTestCases,
   mdxJsxTestCases,
-  textNormalizationTestCases,
   integrationTestCases,
-  replacementOptions,
-  brOptions,
-  brAndWordOptions,
 } from "./helpers/test-data.js"
 
 describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
-  describe("1. BR 태그 정규화", () => {
-    brTagTestCases.forEach((testCase) => {
-      it(testCase.name, async () => {
-        const result = await formatWithPlugin(
-          testCase.input,
-          "markdown",
-          brOptions
-        )
-        expectBrTagNormalization(result)
-        expect(result.trim()).toBe(testCase.expected)
-      })
-    })
-  })
-
-  describe("2. 테이블 포맷팅", () => {
+  describe("1. 테이블 포맷팅", () => {
     tableTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
-        const result = await formatWithPlugin(
-          testCase.input,
-          "markdown",
-          brOptions
-        )
+        const result = await formatWithPlugin(testCase.input)
 
         // 테이블 구조 검증
         expect(result).toContain("|")
         expectTableAlignment(result)
-
-        // BR 태그가 포함된 경우 정규화 검증
-        if (testCase.input.includes("<br")) {
-          expectBrTagNormalization(result)
-        }
 
         // 특정 헤더 검증
         if (testCase.expected) {
@@ -92,7 +63,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("3. MDX 주석 보존", () => {
+  describe("2. MDX 주석 보존", () => {
     mdxCommentTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
@@ -163,7 +134,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("4. 불완전한 파이프 테이블 보존", () => {
+  describe("3. 불완전한 파이프 테이블 보존", () => {
     incompletePipeTableTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
@@ -191,7 +162,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("5. MDX JSX 엘리먼트 처리", () => {
+  describe("4. MDX JSX 엘리먼트 처리", () => {
     mdxJsxTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input, "mdx")
@@ -199,14 +170,12 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       })
     })
 
-    it("MDX JSX table 내부 <br> 정규화", async () => {
+    it("MDX JSX table 은 원문 그대로 보존", async () => {
       const input =
         "<table><tr><td>값<br>줄</td></tr></table>\n<table><tr><th>헤더<br/>줄</th></tr></table>"
-      const result = await formatWithPlugin(input, "mdx", brOptions)
+      const result = await formatWithPlugin(input, "mdx")
 
-      expect(result).toContain("<br />")
-      expect(result).not.toContain("<br>")
-      expect(result).not.toContain("<br/>")
+      expect(result.trim()).toBe(input)
     })
 
     it("MDX JSX 일반 요소에서도 중복 공백 정리", async () => {
@@ -243,70 +212,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("6. 텍스트 정규화", () => {
-    textNormalizationTestCases.forEach((testCase) => {
-      it(testCase.name, async () => {
-        const result = await formatWithPlugin(
-          testCase.input,
-          testCase.parser ?? "markdown",
-          testCase.options ?? {}
-        )
-        expect(result).toContain(testCase.expected)
-      })
-    })
-
-    it("인라인 코드와 코드 블록은 정규화 대상이 아님", async () => {
-      const input = "동의 항목\n`동의 항목`\n\n```\n동의 항목\n```"
-      const result = await formatWithPlugin(
-        input,
-        "markdown",
-        replacementOptions
-      )
-
-      expect(result).toContain("동의항목")
-      expect(result).toContain("`동의 항목`")
-      expect(result).toContain("```\n동의 항목\n```")
-    })
-
-    it("이스케이프된 대괄호는 코드/주석 구간을 제외하고만 정규화해야 함", async () => {
-      const input = `\\[예시
-\`\\\\[코드]\`
-
-\`\`\`
-\\\\[펜스]
-\`\`\`
-
-{/* \\[주석예시] */}`
-      const result = await formatWithPlugin(input, "mdx")
-
-      expect(result).toContain("[예시")
-      expect(result).toContain("`\\\\[코드]`")
-      expect(result).not.toContain("`[코드]`")
-      expect(result).toContain("```\n\\\\[펜스]\n```")
-      expect(result).not.toContain("```\n[펜스]\n```")
-      expect(result).toContain("{/* \\[주석예시] */}")
-      expect(result).not.toContain("{/* [주석예시] */}")
-    })
-
-    it("링크가 함께 있는 본문에서도 이스케이프된 대괄호를 정규화해야 함", async () => {
-      const input =
-        "On the [app management page](https://developers.example.com/console/app), you can check and modify the basic information registered when [creating a Developers app](../tutorial/start#create) in \\[App] > \\[General] > \\[App basic information]."
-      const result = await formatWithPlugin(input, "mdx")
-
-      expect(result).toContain(
-        "in [App] > [General] > [App basic information]."
-      )
-      expect(result).not.toContain("\\[App]")
-      expect(result).toContain(
-        "[app management page](https://developers.example.com/console/app)"
-      )
-      expect(result).toContain(
-        "[creating a Developers app](../tutorial/start#create)"
-      )
-    })
-  })
-
-  describe("7. 파서 호환성", () => {
+  describe("5. 파서 호환성", () => {
     it("마크다운 파서", async () => {
       const input = "| A | B |\n| --- | --- |\n| 1 | 2 |"
       const result = await formatWithPlugin(input, "markdown")
@@ -322,23 +228,16 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("8. 통합 시나리오", () => {
+  describe("6. 통합 시나리오", () => {
     integrationTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
-        const result = await formatWithPlugin(
-          testCase.input,
-          "markdown",
-          brOptions
-        )
+        const result = await formatWithPlugin(testCase.input)
 
         testCase.expectedContains.forEach((expected) => {
           expect(result).toContain(expected)
         })
 
         // 종합적인 검증
-        if (result.includes("<br")) {
-          expectBrTagNormalization(result)
-        }
         if (result.includes("{/*")) {
           expectMdxCommentPreservation(result, ["{/* API 호출 예시 */}"])
         }
@@ -349,7 +248,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("9. 에지 케이스", () => {
+  describe("7. 에지 케이스", () => {
     it("빈 입력", async () => {
       const result = await formatWithPlugin("")
       expect(result.trim()).toBe("")
@@ -375,14 +274,13 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
 
 동의 항목 확인`
 
-      const result = await formatWithPlugin(input, "mdx", brAndWordOptions)
+      const result = await formatWithPlugin(input, "mdx")
 
       expect(result).toContain("# 제목")
       expectMdxCommentPreservation(result, ["{/* 주석 */}"])
-      expectTableStructure(result, ["| 헤더 | 내용<br />서브 |"])
-      expectBrTagNormalization(result)
+      expectTableStructure(result, ["| 헤더 | 내용<br>서브 |"])
       expect(result).toContain('<InfoBox type="note">')
-      expect(result).toContain("동의항목 확인")
+      expect(result).toContain("동의 항목 확인")
     })
 
     it("매우 긴 테이블", async () => {
@@ -397,18 +295,16 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("10. HTML 테이블 정규화", () => {
-    it("HTML table 내부 <br> 정규화", async () => {
+  describe("8. HTML 테이블 보존", () => {
+    it("HTML table 은 원문 그대로 보존", async () => {
       const input = "<table><tr><td>a<br>b</td></tr></table>"
-      const result = await formatWithPlugin(input, "markdown", brOptions)
+      const result = await formatWithPlugin(input, "markdown")
 
-      expect(result).toContain("<br />")
-      expect(result).not.toContain("<br>")
-      expect(result).not.toContain("<br/>")
+      expect(result.trim()).toBe(input)
     })
   })
 
-  describe("11. 실문서 기반 표 회귀 테스트", () => {
+  describe("9. 실문서 기반 표 회귀 테스트", () => {
     const realWorldTableFixtures = [
       {
         name: "에러 코드 표의 링크와 장문 셀을 유지해야 함",
@@ -471,7 +367,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("12. 실문서 기반 MDX 회귀 테스트", () => {
+  describe("10. 실문서 기반 MDX 회귀 테스트", () => {
     it("주석 처리된 JSX 블록은 원문 그대로 보존해야 함", async () => {
       const input = readFixture("commented-jsx-table.mdx")
       const result = await formatWithPlugin(input, "mdx")

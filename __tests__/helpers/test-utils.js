@@ -41,16 +41,6 @@ export function expectTableStructure(result, expectedHeaders) {
   })
 }
 
-// BR 태그 정규화 검증
-export function expectBrTagNormalization(result) {
-  expect(result).toContain("<br />")
-  expect(result).not.toContain("<br>")
-  expect(result).not.toContain("<br/>")
-  expect(result).not.toContain("<BR>")
-  expect(result).not.toContain("<Br/>")
-  expect(result).not.toContain("<br >")
-}
-
 // MDX 주석 보존 검증
 export function expectMdxCommentPreservation(result, expectedComments) {
   expectedComments.forEach((comment) => {
