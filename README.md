@@ -16,7 +16,7 @@ Pipes are surrounded by exactly one space, and cells are never padded to match c
 - [Configuration](#configuration)
 - [Running it](#running-it)
 - [Table compaction](#table-compaction)
-- [Companion plugin](#companion-plugin)
+- [prettier-plugin-markdown-replacements](#prettier-plugin-markdown-replacements)
 - [Compatibility](#compatibility)
 - [Development](#development)
 - [License](#license)
@@ -51,6 +51,27 @@ When a table packs several lines into one cell with `<br />`, mixing lists and c
 
 The description cells of `title` and `is_public` are padded out to the width of the `send_mode` description.
 
+With word wrap on in an 80-column editor, it looks roughly like this. The padding stretches into what look like blank lines, the last cell of each row is pushed onto a line of its own, and the delimiter row runs on for four lines.
+
+```text
+| Name      | Type      | Description
+
+                                           | Required |
+| --------- | --------- |
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+---------------- | -------- |
+| title     | `String`  | Notification title
+
+                                           | O        |
+| send_mode | `Integer` | Delivery mode<br />- `0`: send immediately<br />- `1`:
+schedule for later<br />--set the time with `send_at`<br />- `2`: do not
+send<br />**Note**: defaults to `0` when omitted | X        |
+| is_public | `Boolean` | Whether the notice is public
+
+                                           | X        |
+```
+
 **What this plugin produces**
 
 <!-- prettier-ignore -->
@@ -59,6 +80,18 @@ The description cells of `title` and `is_public` are padded out to the width of 
 | --- | --- | --- | --- |
 | title | `String` | Notification title | O |
 | send_mode | `Integer` | Delivery mode<br />- `0`: send immediately<br />- `1`: schedule for later<br />--set the time with `send_at`<br />- `2`: do not send<br />**Note**: defaults to `0` when omitted | X |
+| is_public | `Boolean` | Whether the notice is public | X |
+```
+
+Under the same word wrap, only the long `send_mode` row folds, into three lines; the other four rows stay on one line each.
+
+```text
+| Name | Type | Description | Required |
+| --- | --- | --- | --- |
+| title | `String` | Notification title | O |
+| send_mode | `Integer` | Delivery mode<br />- `0`: send immediately<br />- `1`:
+schedule for later<br />--set the time with `send_at`<br />- `2`: do not
+send<br />**Note**: defaults to `0` when omitted | X |
 | is_public | `Boolean` | Whether the notice is public | X |
 ```
 
@@ -205,7 +238,7 @@ Table compaction has no option of its own: registering the plugin turns it on.
 | Trailing ASCII space in a cell | Removed |
 | Alignment markers | `:--`, `:-:` and `--:` are preserved as written |
 
-Line-break tags and the wording inside a cell are left as written. Correcting those is a separate concern, handled by the [companion plugin](#companion-plugin).
+Line-break tags and the wording inside a cell are left as written. Correcting those is what [`prettier-plugin-markdown-replacements`](#prettier-plugin-markdown-replacements) is for.
 
 ### What is left untouched
 
@@ -223,13 +256,11 @@ A Markdown table written inside an MDX comment can come out of a formatter as `*
 
 This is the only place the plugin changes anything other than layout, and it is deliberately narrow. The pipe is removed only when it trails a real comment close, matched against the comment ranges found in the source, and only at the end of a row. It repairs damage a formatter caused rather than editing what an author wrote: without it a document can stop parsing after a round trip.
 
-## Companion plugin
+## prettier-plugin-markdown-replacements
 
-This plugin only decides how a table is printed. It never rewrites the words inside a cell.
+This plugin only decides how a table is printed and never rewrites the words inside a cell. [`prettier-plugin-markdown-replacements`](https://github.com/cudoment/prettier-plugin-markdown-replacements) corrects spellings and unifies notations such as `<br>` versus `<br />`, and its `markdownReplacements` option can be set in the same configuration.
 
-Correcting spellings, or unifying a notation such as `<br>` versus `<br />`, is what [`prettier-plugin-markdown-replacements`](https://github.com/cudoment/prettier-plugin-markdown-replacements) is for. The two are independent: either works on its own, and they can be used together.
-
-Prettier resolves one parser per language, and both plugins contribute one, so **the replacements plugin has to be listed last.** Listed first, its rules are silently skipped.
+Prettier resolves one parser per language and both plugins contribute one, so **`prettier-plugin-markdown-replacements` has to be listed last.** Listed first, its rules are silently skipped.
 
 ```json
 {
