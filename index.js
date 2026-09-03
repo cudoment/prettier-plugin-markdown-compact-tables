@@ -328,6 +328,16 @@ function compactTablesPrint(path, options, print) {
     if (hasFencedCodeBlock(raw)) return raw
   }
 
+  // These two node types belong to a `remark-mdx` v2 or later tree, where an
+  // MDX element is parsed into a named element node. Prettier's own `markdown`
+  // and `mdx` parsers never build them: the `mdx` parser reports a whole MDX
+  // element as the single `jsx` node the branch above handles, and the
+  // `markdown` parser reports it as `html`. So this branch stays inert on
+  // Prettier's built-in parsers and only runs when another plugin supplies a
+  // parser that hands the printer a `remark-mdx` tree. It is kept because the
+  // `jsx` branch above would not recognise a table in that shape, and a table
+  // printed by the built-in printer instead of returned verbatim is exactly
+  // the padding this plugin exists to avoid.
   if (
     node?.type === "mdxJsxTextElement" ||
     node?.type === "mdxJsxFlowElement"
@@ -446,6 +456,9 @@ const customPrinter = {
       const raw = getOriginalNodeRaw(node, options) ?? node.value
       if (hasFencedCodeBlock(raw)) return null
     }
+    // Same `remark-mdx` node types as in `print`: unreachable through
+    // Prettier's own parsers, and here so that a fenced code block inside such
+    // an element is left to `print` rather than embedded.
     if (
       (node?.type === "mdxJsxTextElement" ||
         node?.type === "mdxJsxFlowElement") &&
