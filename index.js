@@ -151,19 +151,19 @@ const hasFencedCodeBlock = (raw) => {
   return false
 }
 
-const getOriginalNodeRaw = (node, options) => {
-  if (
-    !options?.originalText ||
-    node?.position?.start?.offset == null ||
-    node?.position?.end?.offset == null
-  ) {
-    return null
-  }
-  return options.originalText.slice(
-    node.position.start.offset,
-    node.position.end.offset
-  )
+// Most branches below decide what to print by looking at the node's own source
+// text, which needs both its offsets and `originalText`. A node the parser gave
+// no position, or a run without `originalText`, gets `null` here and falls
+// through to the built-in printer.
+const getNodeSlice = (node, options) => {
+  const start = node?.position?.start?.offset
+  const end = node?.position?.end?.offset
+  if (!options?.originalText || start == null || end == null) return null
+  return { start, end, raw: options.originalText.slice(start, end) }
 }
+
+const getOriginalNodeRaw = (node, options) =>
+  getNodeSlice(node, options)?.raw ?? null
 
 const dropSpaceBeforeClosingPipe = (str) => {
   if (str.includes("|")) {
@@ -256,46 +256,29 @@ export const unwrapTableCellRaw = (raw) => {
 function compactTablesPrint(path, options, print) {
   const node = path.node
 
-  if (
-    options.originalText &&
-    node?.position?.start?.offset != null &&
-    node?.position?.end?.offset != null
-  ) {
-    const { start, end } = node.position
-    const raw = options.originalText.slice(start.offset, end.offset)
+  const slice = getNodeSlice(node, options)
+
+  if (slice) {
     const ranges = getMdxCommentRanges(options.originalText)
 
-    if (isNodeFullyInsideMdxComment(ranges, start.offset, end.offset)) {
-      return raw
+    if (isNodeFullyInsideMdxComment(ranges, slice.start, slice.end)) {
+      return slice.raw
     }
 
-    const fixed = fixLeakedPipeAfterMdxCommentClose(ranges, start.offset, raw)
-    if (fixed !== raw) return fixed
-  }
-
-  if (
-    node?.type === "tableRow" &&
-    options.originalText &&
-    node.position?.start?.offset != null &&
-    node.position?.end?.offset != null
-  ) {
-    const { start, end } = node.position
-    let raw = options.originalText.slice(start.offset, end.offset)
-    raw = raw.replace(/([^|\s])(\s+)(\|)/g, "$1$3")
-    return normalizeCellText(raw)
-  }
-
-  if (
-    node?.type === "tableCell" &&
-    options.originalText &&
-    node.position?.start?.offset != null &&
-    node.position?.end?.offset != null
-  ) {
-    const { start, end } = node.position
-    const raw = unwrapTableCellRaw(
-      options.originalText.slice(start.offset, end.offset)
+    const fixed = fixLeakedPipeAfterMdxCommentClose(
+      ranges,
+      slice.start,
+      slice.raw
     )
-    return normalizeCellText(raw)
+    if (fixed !== slice.raw) return fixed
+  }
+
+  if (node?.type === "tableRow" && slice) {
+    return normalizeCellText(slice.raw.replace(/([^|\s])(\s+)(\|)/g, "$1$3"))
+  }
+
+  if (node?.type === "tableCell" && slice) {
+    return normalizeCellText(unwrapTableCellRaw(slice.raw))
   }
 
   const mdxCommentTargetTypes = [
@@ -306,30 +289,19 @@ function compactTablesPrint(path, options, print) {
     "strong",
     "inlineCode",
   ]
-  if (
-    mdxCommentTargetTypes.includes(node?.type) &&
-    options.originalText &&
-    node.position?.start?.offset != null &&
-    node.position?.end?.offset != null
-  ) {
-    const { start, end } = node.position
-    const raw = options.originalText.slice(start.offset, end.offset)
-    if (/\{\/\*|\*\/\}/.test(raw)) {
-      return raw
+  if (mdxCommentTargetTypes.includes(node?.type) && slice) {
+    if (/\{\/\*|\*\/\}/.test(slice.raw)) {
+      return slice.raw
     }
   }
 
-  if (node?.type === "paragraph" && options.originalText) {
-    const { start, end } = node.position ?? {}
-    if (start?.offset != null && end?.offset != null) {
-      const raw = options.originalText.slice(start.offset, end.offset)
-      const lines = raw.split("\n")
-      const allPipe = lines.every((l) => /^\s*\|/.test(l))
-      const hasSeparator = lines.some((l) => /^\s*\|?\s*:?-{3,}:?\s*\|/.test(l))
+  if (node?.type === "paragraph" && slice) {
+    const lines = slice.raw.split("\n")
+    const allPipe = lines.every((l) => /^\s*\|/.test(l))
+    const hasSeparator = lines.some((l) => /^\s*\|?\s*:?-{3,}:?\s*\|/.test(l))
 
-      if (allPipe && !hasSeparator) {
-        return raw
-      }
+    if (allPipe && !hasSeparator) {
+      return slice.raw
     }
   }
 
@@ -377,57 +349,37 @@ function compactTablesPrint(path, options, print) {
     const mdxCommentRanges = options.originalText
       ? getMdxCommentRanges(options.originalText)
       : []
-    const isCommentRow = (row) =>
-      options.originalText &&
-      row?.position?.start?.offset != null &&
-      row?.position?.end?.offset != null &&
-      isNodeFullyInsideMdxComment(
+    const commentRowSlice = (row) => {
+      const rowSlice = getNodeSlice(row, options)
+      if (!rowSlice) return null
+      return isNodeFullyInsideMdxComment(
         mdxCommentRanges,
-        row.position.start.offset,
-        row.position.end.offset
+        rowSlice.start,
+        rowSlice.end
       )
+        ? rowSlice
+        : null
+    }
 
     if (
       rowLengths.some(
-        (len, idx) => !isCommentRow(rows[idx]) && len !== headerCount
+        (len, idx) => !commentRowSlice(rows[idx]) && len !== headerCount
       )
     ) {
       // Don't try to normalize malformed tables. Preserve the raw text so we
       // don't introduce extra padding pipes/spaces.
-      if (
-        options.originalText &&
-        node.position?.start?.offset != null &&
-        node.position?.end?.offset != null
-      ) {
-        return options.originalText.slice(
-          node.position.start.offset,
-          node.position.end.offset
-        )
-      }
+      if (slice) return slice.raw
       return mdastPrinterOrig.print(path, options, print)
     }
     const align = node.align || []
 
     const buildRow = (rowIdx) => {
-      const row = rows[rowIdx]
-      if (
-        options.originalText &&
-        row?.position?.start?.offset != null &&
-        row?.position?.end?.offset != null &&
-        isNodeFullyInsideMdxComment(
-          mdxCommentRanges,
-          row.position.start.offset,
-          row.position.end.offset
-        )
-      ) {
-        const raw = options.originalText.slice(
-          row.position.start.offset,
-          row.position.end.offset
-        )
+      const rowSlice = commentRowSlice(rows[rowIdx])
+      if (rowSlice) {
         return fixLeakedPipeAfterMdxCommentClose(
           mdxCommentRanges,
-          row.position.start.offset,
-          raw
+          rowSlice.start,
+          rowSlice.raw
         )
       }
 

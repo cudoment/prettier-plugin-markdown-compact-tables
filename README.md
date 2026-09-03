@@ -217,6 +217,12 @@ Preserving the source beats correcting it automatically and breaking the table s
 - tables inside an MDX comment, `{/* ... */}`
 - MDX/JSX elements that contain a fenced code block
 
+### The one repair the printer makes
+
+A Markdown table written inside an MDX comment can come out of a formatter as `*/} |` on its closing row. The stray pipe is not valid MDX, and the next parse fails on it, so the printer drops it back to `*/}`.
+
+This is the only place the plugin changes anything other than layout, and it is deliberately narrow. The pipe is removed only when it trails a real comment close, matched against the comment ranges found in the source, and only at the end of a row. It repairs damage a formatter caused rather than editing what an author wrote: without it a document can stop parsing after a round trip.
+
 ## Companion plugin
 
 This plugin only decides how a table is printed. It never rewrites the words inside a cell.
