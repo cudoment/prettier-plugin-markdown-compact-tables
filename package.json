@@ -10,16 +10,16 @@
     "table",
     "formatter"
   ],
-  "homepage": "https://github.com/cspidar/prettier-plugin-markdown-compact-tables#readme",
+  "homepage": "https://github.com/cudoment/prettier-plugin-markdown-compact-tables#readme",
   "bugs": {
-    "url": "https://github.com/cspidar/prettier-plugin-markdown-compact-tables/issues"
+    "url": "https://github.com/cudoment/prettier-plugin-markdown-compact-tables/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cspidar/prettier-plugin-markdown-compact-tables.git"
+    "url": "git+https://github.com/cudoment/prettier-plugin-markdown-compact-tables.git"
   },
   "license": "MIT",
-  "author": "cspidar",
+  "author": "cudoment",
   "type": "module",
   "main": "index.js",
   "exports": {

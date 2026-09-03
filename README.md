@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![CI](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![CI](https://github.com/cudoment/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cudoment/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 **English** | [한국어](./README.ko.md)
 
@@ -227,7 +227,7 @@ This is the only place the plugin changes anything other than layout, and it is 
 
 This plugin only decides how a table is printed. It never rewrites the words inside a cell.
 
-Correcting spellings, or unifying a notation such as `<br>` versus `<br />`, is what [`prettier-plugin-markdown-replacements`](https://github.com/cspidar/prettier-plugin-markdown-replacements) is for. The two are independent: either works on its own, and they can be used together.
+Correcting spellings, or unifying a notation such as `<br>` versus `<br />`, is what [`prettier-plugin-markdown-replacements`](https://github.com/cudoment/prettier-plugin-markdown-replacements) is for. The two are independent: either works on its own, and they can be used together.
 
 Prettier resolves one parser per language, and both plugins contribute one, so **the replacements plugin has to be listed last.** Listed first, its rules are silently skipped.
 

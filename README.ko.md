@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![CI](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![CI](https://github.com/cudoment/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cudoment/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 [English](./README.md) | **한국어**
 
@@ -229,7 +229,7 @@ MDX 주석 안에 쓴 마크다운 표는 포맷을 거치면서 닫는 줄이 `
 
 이 플러그인은 표를 어떻게 출력할지만 정합니다. 셀 안의 문구는 절대 바꾸지 않습니다.
 
-표기를 바로잡거나 `<br>`와 `<br />` 중 하나로 통일하는 일은 [`prettier-plugin-markdown-replacements`](https://github.com/cspidar/prettier-plugin-markdown-replacements)가 담당합니다. 두 플러그인은 서로 독립적이어서 각각 단독으로도 동작하며, 함께 쓸 수도 있습니다.
+표기를 바로잡거나 `<br>`와 `<br />` 중 하나로 통일하는 일은 [`prettier-plugin-markdown-replacements`](https://github.com/cudoment/prettier-plugin-markdown-replacements)가 담당합니다. 두 플러그인은 서로 독립적이어서 각각 단독으로도 동작하며, 함께 쓸 수도 있습니다.
 
 Prettier는 한 언어에 파서를 하나만 쓰는데 두 플러그인이 모두 파서를 제공하므로, **치환 플러그인을 반드시 마지막에 두어야 합니다.** 앞에 두면 규칙이 조용히 무시됩니다.
 
