@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5+](https://img.shields.io/badge/prettier-3.5%2B-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![CI](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 [English](./README.md) | **한국어**
 
@@ -83,9 +83,9 @@ Prettier의 기본 마크다운 프린터는 표가 `printWidth` 안에 들어�
 | 항목 | 버전 |
 | --- | --- |
 | Node.js | 18 이상 |
-| Prettier | 3.5.3 이상 |
+| Prettier | 3.0 이상 |
 
-3.5.3 이후의 Prettier 3 버전은 모두 테스트로 확인했습니다. 자세한 내용은 [호환성](#호환성)에 있습니다.
+Prettier 3의 모든 마이너 버전을 테스트로 확인했습니다. 자세한 내용은 [호환성](#호환성)에 있습니다.
 
 ## 설치
 
@@ -202,9 +202,9 @@ npx prettier --check "**/*.{md,mdx}"
 | 대상 | 동작 |
 | --- | --- |
 | 파이프 양옆 공백 | 한 칸으로 고정하고, 컬럼 너비를 맞추는 패딩은 넣지 않습니다 |
-| 셀 안 연속 공백 | 한 칸으로 축약합니다 |
-| 셀 안 유니코드 공백 | 줄바꿈 없는 공백과 전각 공백은 내용으로 보고 그대로 둡니다 |
-| 셀 끝 공백 | 제거합니다 |
+| 셀 안의 연속된 ASCII 공백 | 한 칸으로 축약합니다 |
+| 셀 안 유니코드 공백 | 줄바꿈 없는 공백과 전각 공백은 셀 끝에 있어도 내용으로 보고 그대로 둡니다 |
+| 셀 끝의 ASCII 공백 | 제거합니다 |
 | 정렬 지정 | `:--`, `:-:`, `--:`를 그대로 유지합니다 |
 
 줄바꿈 태그와 셀 안의 문구는 원문 그대로 둡니다. 그런 보정은 별개의 관심사이며 [짝이 되는 플러그인](#짝이-되는-플러그인)이 담당합니다.
@@ -244,9 +244,11 @@ Prettier는 한 언어에 파서를 하나만 쓰는데 두 플러그인이 모�
 
 | Prettier | 상태 |
 | --- | --- |
-| 3.5.3 ~ 3.9.x | 지원합니다. 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0, 3.9.6에서 테스트 95건이 모두 통과합니다 |
+| 3.0 ~ 3.9 | 지원합니다. 3.0.3, 3.1.1, 3.2.5, 3.3.3, 3.4.2, 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.8.5, 3.9.0, 3.9.6에서 전체 테스트가 통과합니다 |
 
-Prettier 3.9에서 `tableCell`의 위치 정보가 파이프를 포함하도록 바뀌었으며, 플러그인이 이를 처리합니다. 두 버전의 출력은 완전히 같습니다. 실제 문서 517건을 3.8.1과 3.9.6으로 각각 포맷했을 때 모든 파일의 결과가 일치했습니다.
+Prettier 3.9에서 `tableCell`의 위치 정보가 파이프를 포함하도록 바뀌었으며, 플러그인이 이를 처리합니다. 테스트 스위트가 지원하는 모든 버전에서 같은 출력이 나오는지 확인합니다.
+
+Prettier 4 시험판은 선언된 peer dependency 범위 밖에 있으며 테스트하지 않았습니다.
 
 파서는 Prettier에 내장된 `markdown`과 `mdx`를 모두 지원합니다. 이 플러그인은 내장 마크다운 플러그인의 프린터를 감싸는 방식으로 동작하므로, 표와 관련되지 않은 출력은 Prettier의 기본 동작을 그대로 따릅니다.
 
@@ -267,6 +269,8 @@ npm run format
 ```
 
 테스트는 [Vitest](https://vitest.dev)로 작성되어 있으며 `__tests__/`에 있습니다. `__tests__/fixtures/`에는 실제 문서에서 가져온 MDX 조각이 들어 있어서, 표 구조가 깨지지 않는지 확인하는 근거가 됩니다.
+
+`.github/workflows/ci.yml`의 GitHub Actions 워크플로는 같은 테스트를 Node.js 18, 20, 22에서 실행하고, 지원하는 Prettier 마이너 버전마다 한 번씩 더 실행합니다.
 
 ## 라이선스
 

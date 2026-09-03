@@ -1,6 +1,6 @@
 # prettier-plugin-markdown-compact-tables
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3.5+](https://img.shields.io/badge/prettier-3.5%2B-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
+[![CI](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml/badge.svg)](https://github.com/cspidar/prettier-plugin-markdown-compact-tables/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE) [![Prettier 3](https://img.shields.io/badge/prettier-3.x-1A2B34?logo=prettier&logoColor=F7B93E)](https://prettier.io) [![Node.js 18+](https://img.shields.io/badge/node-%3E%3D18-5FA04E?logo=node.js&logoColor=white)](https://nodejs.org)
 
 **English** | [한국어](./README.ko.md)
 
@@ -81,9 +81,9 @@ It also affects review. Adding one sentence to the `send_mode` description recom
 | Item | Version |
 | --- | --- |
 | Node.js | 18 or later |
-| Prettier | 3.5.3 or later |
+| Prettier | 3.0 or later |
 
-Every Prettier 3 release from 3.5.3 onward is covered by the test suite. See [Compatibility](#compatibility).
+Every Prettier 3 minor release is covered by the test suite. See [Compatibility](#compatibility).
 
 ## Installation
 
@@ -200,9 +200,9 @@ Table compaction has no option of its own: registering the plugin turns it on.
 | Target | Behavior |
 | --- | --- |
 | Spaces around pipes | Fixed at one space; no padding is added to match column widths |
-| Repeated spaces inside a cell | Collapsed to a single space |
-| Unicode spaces in a cell | NBSP and ideographic space are content, so they are kept as written |
-| Trailing space in a cell | Removed |
+| Runs of ASCII spaces inside a cell | Collapsed to a single space |
+| Unicode spaces in a cell | NBSP and ideographic space are content, so they are kept as written, even at the ends of a cell |
+| Trailing ASCII space in a cell | Removed |
 | Alignment markers | `:--`, `:-:` and `--:` are preserved as written |
 
 Line-break tags and the wording inside a cell are left as written. Correcting those is a separate concern, handled by the [companion plugin](#companion-plugin).
@@ -242,9 +242,11 @@ Prettier resolves one parser per language, and both plugins contribute one, so *
 
 | Prettier | Status |
 | --- | --- |
-| 3.5.3 ~ 3.9.x | Supported. All 95 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
+| 3.0 to 3.9 | Supported. The full test suite passes on 3.0.3, 3.1.1, 3.2.5, 3.3.3, 3.4.2, 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.8.5, 3.9.0 and 3.9.6 |
 
-Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes, which the plugin accounts for. The two versions produce byte-identical output: formatting a corpus of 517 real documents with 3.8.1 and with 3.9.6 gives the same result for every file.
+Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes. The plugin accounts for that, and the test suite asserts the same output on every supported version.
+
+Prettier 4 pre-releases are outside the declared peer dependency range and have not been tested.
 
 Both of Prettier's built-in parsers, `markdown` and `mdx`, are supported. The plugin wraps the printer of the built-in Markdown plugin, so anything unrelated to tables follows Prettier's default behavior.
 
@@ -265,6 +267,8 @@ npm run format
 ```
 
 The tests are written with [Vitest](https://vitest.dev) and live in `__tests__/`. The MDX fragments under `__tests__/fixtures/` come from real documents and serve as evidence that table structures survive formatting.
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` runs the same suite on Node.js 18, 20 and 22, and once more against each supported Prettier minor release.
 
 ## License
 
