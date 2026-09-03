@@ -5,13 +5,13 @@ const {
   builders: { join, hardline },
 } = doc
 
+const PLACEHOLDER_PREFIX = "__COMPACT_TABLES_PLACEHOLDER_"
+
 const createPlaceholderPrefix = (input) => {
-  let prefix = `__COMPACT_TABLES_PLACEHOLDER_${Math.random()
-    .toString(36)
-    .slice(2, 8)}__`
-  while (input.includes(prefix)) {
-    prefix = `__COMPACT_TABLES_PLACEHOLDER_${Math.random().toString(36).slice(2, 8)}__`
-  }
+  let prefix
+  do {
+    prefix = `${PLACEHOLDER_PREFIX}${Math.random().toString(36).slice(2, 8)}__`
+  } while (input.includes(prefix))
   return prefix
 }
 
@@ -23,41 +23,68 @@ const createPlaceholderPrefix = (input) => {
 // `replaceAll`.
 const replaceAllLiteral = (text, token, value) => text.split(token).join(value)
 
-const replaceCodeSpans = (input, replace) => {
-  let result = ""
-  let i = 0
-
-  while (i < input.length) {
-    if (input[i] !== "`") {
-      result += input[i]
-      i++
-      continue
-    }
-
-    let tickCount = 1
-    while (i + tickCount < input.length && input[i + tickCount] === "`") {
-      tickCount++
-    }
-
-    const fence = "`".repeat(tickCount)
-    const end = input.indexOf(fence, i + tickCount)
-
-    if (end === -1) {
-      result += input[i]
-      i++
-      continue
-    }
-
-    const span = input.slice(i, end + tickCount)
-    result += replace(span)
-    i = end + tickCount
+// Calls `onSpan(start, end)` for every code span in `text`, where `end` is the
+// offset just past the closing backticks. Follows CommonMark: a run of N
+// backticks is closed only by the next run of exactly N backticks, a run of a
+// different length in between is content, and an opening run that finds no
+// closer is literal text.
+const forEachCodeSpan = (text, onSpan) => {
+  const runLength = (from) => {
+    let length = 0
+    while (text[from + length] === "`") length += 1
+    return length
   }
 
-  return result
+  let i = text.indexOf("`")
+  while (i !== -1) {
+    const open = runLength(i)
+    let j = text.indexOf("`", i + open)
+    while (j !== -1) {
+      const run = runLength(j)
+      if (run === open) break
+      j = text.indexOf("`", j + run)
+    }
+
+    if (j === -1) {
+      i = text.indexOf("`", i + open)
+      continue
+    }
+    onSpan(i, j + open)
+    i = text.indexOf("`", j + open)
+  }
 }
 
-const isSingleCharSequence = (value, ch) =>
-  value.length > 0 && value.split("").every((c) => c === ch)
+const replaceCodeSpans = (input, replace) => {
+  let result = ""
+  let last = 0
+  forEachCodeSpan(input, (start, end) => {
+    result += input.slice(last, start) + replace(input.slice(start, end))
+    last = end
+  })
+  return result + input.slice(last)
+}
+
+// A fence is three or more backticks or tildes at the start of a line, after
+// optional indentation. A backtick fence cannot carry a backtick in its info
+// string. Returns the fence, or `null` when the line opens none.
+const matchFenceOpen = (line) => {
+  const match = line.match(/^\s*(`{3,}|~{3,})(.*)$/)
+  if (!match) return null
+  const [, fence, info] = match
+  if (fence[0] === "`" && info.includes("`")) return null
+  return { char: fence[0], length: fence.length }
+}
+
+// A fence closes on a line that holds nothing but a run of the same character,
+// at least as long as the opening run.
+const closesFence = (line, fence) => {
+  const match = line.match(/^\s*(`{3,}|~{3,})\s*$/)
+  return (
+    match !== null &&
+    match[1][0] === fence.char &&
+    match[1].length >= fence.length
+  )
+}
 
 // `{/*` and `*/}` inside a code span or a fenced code block are characters a
 // reader sees, not comment markers. Scanning for them without excluding code
@@ -73,65 +100,28 @@ const maskCodeRegions = (input) => {
     }
   }
 
-  let lineStart = 0
   let openFence = null
-
+  let lineStart = 0
   while (lineStart <= input.length) {
     const newlineIdx = input.indexOf("\n", lineStart)
     const lineEnd = newlineIdx === -1 ? input.length : newlineIdx
-    const line = input.slice(lineStart, lineEnd)
+    const line = input.slice(lineStart, lineEnd).replace(/\r$/, "")
 
     if (openFence) {
       blank(lineStart, lineEnd)
-      const close = line.match(/^\s*([`~]{3,})\s*$/)?.[1]
-      if (
-        close &&
-        close[0] === openFence.char &&
-        isSingleCharSequence(close, openFence.char) &&
-        close.length >= openFence.length
-      ) {
-        openFence = null
-      }
+      if (closesFence(line, openFence)) openFence = null
     } else {
-      const openMatch = line.match(/^\s*([`~]{3,})(.*)$/)
-      const fence = openMatch?.[1]
-      // A backtick fence cannot carry backticks in its info string.
-      const infoIsValid = !(fence?.[0] === "`" && openMatch[2].includes("`"))
-      if (fence && isSingleCharSequence(fence, fence[0]) && infoIsValid) {
-        openFence = { char: fence[0], length: fence.length }
-        blank(lineStart, lineEnd)
-      }
+      openFence = matchFenceOpen(line)
+      if (openFence) blank(lineStart, lineEnd)
     }
 
     if (newlineIdx === -1) break
     lineStart = newlineIdx + 1
   }
 
-  // Inline code spans, scanned over the text whose fences are already blank so
+  // Code spans are scanned over the text whose fences are already blank, so
   // that a backtick inside a code block cannot open a span.
-  const afterFences = chars.join("")
-  let i = 0
-  while (i < afterFences.length) {
-    if (afterFences[i] !== "`") {
-      i += 1
-      continue
-    }
-
-    let ticks = 1
-    while (i + ticks < afterFences.length && afterFences[i + ticks] === "`") {
-      ticks += 1
-    }
-
-    const delimiter = "`".repeat(ticks)
-    const end = afterFences.indexOf(delimiter, i + ticks)
-    if (end === -1) {
-      i += 1
-      continue
-    }
-
-    blank(i, end + ticks)
-    i = end + ticks
-  }
+  forEachCodeSpan(chars.join(""), blank)
 
   return chars.join("")
 }
@@ -171,10 +161,11 @@ const isNodeFullyInsideMdxComment = (ranges, nodeStart, nodeEnd) => {
   )
 }
 
+// A Markdown table written inside a `{/* ... */}` comment can come out of a
+// formatter with `*/} |` on its closing row. The stray pipe makes the document
+// invalid MDX, so it is dropped back to `*/}`. Only a pipe that trails a real
+// comment close, matched against the ranges found in the source, is touched.
 const fixLeakedPipeAfterMdxCommentClose = (ranges, nodeStart, raw) => {
-  // Our formatter (or other tooling) can accidentally emit `*/} |` at the end of
-  // a table row when a Markdown table is inside a `{/* ... */}` comment.
-  // That breaks MDX parsing, so we normalize it back to the valid `*/}`.
   if (!ranges.length || typeof raw !== "string") return raw
   if (!/\*\/\}\s*\|\s*$/.test(raw)) return raw
 
@@ -191,49 +182,18 @@ const fixLeakedPipeAfterMdxCommentClose = (ranges, nodeStart, raw) => {
 }
 
 const isHtmlTable = (raw) =>
-  /<table[\s>]/i.test(raw) ||
-  /<tbody[\s>]/i.test(raw) ||
-  /<thead[\s>]/i.test(raw) ||
-  /<tr[\s>]/i.test(raw) ||
-  /<td[\s>]/i.test(raw) ||
-  /<th[\s>]/i.test(raw)
+  /<(?:table|thead|tbody|tfoot|tr|td|th)[\s>]/i.test(raw)
 
+// Only a fence that is opened and closed within the text counts, so that a
+// lone fence line does not pass for a code block.
 const hasFencedCodeBlock = (raw) => {
   if (typeof raw !== "string" || !raw.includes("\n")) return false
 
-  const lines = raw.split(/\r?\n/)
   let openFence = null
-
-  for (const line of lines) {
-    if (!openFence) {
-      const openMatch = line.match(/^\s*([`~]{3,})(.*)$/)
-      if (!openMatch) continue
-
-      const [, fence, tail] = openMatch
-      const fenceChar = fence[0]
-      if (!isSingleCharSequence(fence, fenceChar)) continue
-      // Backtick fences can't have backticks in the info string.
-      if (fenceChar === "`" && tail.includes("`")) continue
-
-      openFence = { char: fenceChar, minLength: fence.length }
-      continue
-    }
-
-    const closeMatch = line.match(/^\s*([`~]{3,})\s*$/)
-    if (!closeMatch) continue
-
-    const closeFence = closeMatch[1]
-    const closeChar = closeFence[0]
-    if (!isSingleCharSequence(closeFence, closeChar)) continue
-
-    if (
-      closeChar === openFence.char &&
-      closeFence.length >= openFence.minLength
-    ) {
-      return true
-    }
+  for (const line of raw.split(/\r?\n/)) {
+    if (!openFence) openFence = matchFenceOpen(line)
+    else if (closesFence(line, openFence)) return true
   }
-
   return false
 }
 
@@ -251,23 +211,36 @@ const getNodeSlice = (node, options) => {
 const getOriginalNodeRaw = (node, options) =>
   getNodeSlice(node, options)?.raw ?? null
 
-const dropSpaceBeforeClosingPipe = (str) => {
-  if (str.includes("|")) {
-    return str.replace(/([^|\s])(\s+)(\|)/g, "$1$3")
-  }
-  return str.trimEnd()
+// The built-in printer hands a `jsx` node to the JavaScript formatter, which
+// reflows an HTML table and folds the line breaks of a fenced code block. A
+// node holding either is printed as written instead.
+const isJsxPrintedVerbatim = (node, options) => {
+  const raw = getOriginalNodeRaw(node, options) ?? node.value ?? ""
+  return (
+    (/<table[\s>]/i.test(raw) && /<\/table>/i.test(raw)) ||
+    hasFencedCodeBlock(raw)
+  )
 }
 
-// Code spans, HTML tags and entities are lifted out before runs of spaces are
-// collapsed: the spacing inside them is content, not layout.
+// Only ASCII spacing separates a cell from its pipes. Unicode spaces such as
+// NBSP or U+3000 are cell content, so neither `String.prototype.trim` nor `\s`,
+// which both match them, is used on the edges of a cell.
+const trimAsciiSpace = (text) =>
+  text.replace(/^[\t\n\v\f\r ]+/, "").replace(/[\t\n\v\f\r ]+$/, "")
+
+const dropSpaceBeforeClosingPipe = (str) =>
+  str.includes("|")
+    ? str.replace(/([^|\t\n\v\f\r ])[\t\n\v\f\r ]+\|/g, "$1|")
+    : str.replace(/[\t\n\v\f\r ]+$/, "")
+
+// Runs of ASCII spaces collapse to one. Code spans, HTML tags and entities are
+// lifted out first: the spacing inside them is content, not layout.
 const collapseSpaceRuns = (str) => {
   const placeholders = []
-  let placeholderIndex = 0
   const prefix = createPlaceholderPrefix(str)
   const addPlaceholder = (value, kind) => {
-    const token = `${prefix}${kind}_${placeholderIndex}__`
+    const token = `${prefix}${kind}_${placeholders.length}__`
     placeholders.push({ token, value })
-    placeholderIndex++
     return token
   }
 
@@ -283,7 +256,7 @@ const collapseSpaceRuns = (str) => {
     addPlaceholder(match, "ENTITY")
   )
 
-  processedText = processedText.replace(/[ \u00A0]{2,}/g, " ")
+  processedText = processedText.replace(/ {2,}/g, " ")
 
   let result = processedText
   for (let i = placeholders.length - 1; i >= 0; i--) {
@@ -318,17 +291,11 @@ const endsWithUnescapedPipe = (text) => {
   return backslashes % 2 === 0
 }
 
-// Only ASCII spacing separates a cell from its pipes. Unicode spaces such as
-// NBSP or U+3000 are cell content, so `String.prototype.trim` must not be used
-// here: it would drop them.
-const trimAsciiSpace = (text) =>
-  text.replace(/^[\t\n\v\f\r ]+/, "").replace(/[\t\n\v\f\r ]+$/, "")
-
 // Prettier 3.9 changed tableCell positions to cover the surrounding pipes
 // (`| A ` instead of `A`), so the raw slice is unwrapped before it is
-// normalized. On 3.5 through 3.8 a cell slice never starts or ends with an
-// unescaped pipe, which makes this a no-op there. Exported for tests: the
-// repository runs on a Prettier version that never produces the wrapped shape.
+// normalized. On 3.0 through 3.8 a cell slice never starts or ends with an
+// unescaped pipe, which makes this a no-op there. Exported so the unit tests
+// can cover both shapes whichever Prettier version is installed.
 export const unwrapTableCellRaw = (raw) => {
   // The last cell of a row also carries whatever follows the closing pipe, so
   // the edges are trimmed first. Otherwise trailing spaces or tabs hide the
@@ -371,12 +338,6 @@ function compactTablesPrint(path, options, print) {
     if (fixed !== slice.raw) return fixed
   }
 
-  if (node?.type === "tableRow" && slice) {
-    // `normalizeCellText` ends in `dropSpaceBeforeClosingPipe`, which strips the
-    // padding in front of every pipe, so the row needs no separate pass.
-    return normalizeCellText(slice.raw)
-  }
-
   if (node?.type === "tableCell" && slice) {
     return normalizeCellText(unwrapTableCellRaw(slice.raw))
   }
@@ -404,12 +365,8 @@ function compactTablesPrint(path, options, print) {
     if (isHtmlTable(raw)) return raw
   }
 
-  if (node?.type === "jsx") {
-    const raw = getOriginalNodeRaw(node, options) ?? node.value ?? ""
-    if (/<table[\s>]/i.test(raw) && /<\/table>/i.test(raw)) {
-      return raw
-    }
-    if (hasFencedCodeBlock(raw)) return raw
+  if (node?.type === "jsx" && isJsxPrintedVerbatim(node, options)) {
+    return getOriginalNodeRaw(node, options) ?? node.value ?? ""
   }
 
   // These two node types belong to a `remark-mdx` v2 or later tree, where an
@@ -468,8 +425,8 @@ function compactTablesPrint(path, options, print) {
         (len, idx) => !commentRowSlice(rows[idx]) && len !== headerCount
       )
     ) {
-      // Don't try to normalize malformed tables. Preserve the raw text so we
-      // don't introduce extra padding pipes/spaces.
+      // A table whose rows disagree with the header is not normalized. Its
+      // source is kept so that no padding pipes or spaces are introduced.
       if (slice) return slice.raw
       return mdastPrinterOrig.print(path, options, print)
     }
@@ -528,25 +485,17 @@ const customPrinter = {
   print: compactTablesPrint,
   embed: (path, options) => {
     const node = path.node
-    if (
-      node?.type === "jsx" &&
-      typeof node.value === "string" &&
-      /<table[\s>]/i.test(node.value) &&
-      /<\/table>/i.test(node.value)
-    ) {
+    // Returning `null` keeps the node out of the JavaScript formatter, so that
+    // `print` above can return its source as written.
+    if (node?.type === "jsx" && isJsxPrintedVerbatim(node, options)) {
       return null
-    }
-    if (node?.type === "jsx" && typeof node.value === "string") {
-      const raw = getOriginalNodeRaw(node, options) ?? node.value
-      if (hasFencedCodeBlock(raw)) return null
     }
     // Same `remark-mdx` node types as in `print`: unreachable through
     // Prettier's own parsers, and here so that a fenced code block inside such
     // an element is left to `print` rather than embedded.
     if (
-      (node?.type === "mdxJsxTextElement" ||
-        node?.type === "mdxJsxFlowElement") &&
-      options?.originalText
+      node?.type === "mdxJsxTextElement" ||
+      node?.type === "mdxJsxFlowElement"
     ) {
       const raw = getOriginalNodeRaw(node, options)
       if (raw && hasFencedCodeBlock(raw)) return null

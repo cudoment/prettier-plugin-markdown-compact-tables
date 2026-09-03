@@ -398,6 +398,13 @@ describe("prettier-plugin-markdown-compact-tables", () => {
       expect(result.trim()).toBe(input)
     })
 
+    it("keeps an HTML table fragment that opens with a footer", async () => {
+      const input = "<tfoot><tr><td>a  b</td></tr></tfoot>"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result.trim()).toBe(input)
+    })
+
     it("keeps a multi line HTML table as written", async () => {
       const input = [
         "<table>",

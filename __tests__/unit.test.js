@@ -7,9 +7,9 @@ import {
 import { unwrapTableCellRaw } from "../index.js"
 
 describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
-  // The Prettier version this repository installs may not produce the wrapped
-  // cell slice that 3.9 introduced, so the helper is called directly to cover
-  // both shapes.
+  // Whether the installed Prettier wraps a cell slice in its pipes depends on
+  // the version (3.9 introduced the wrapped shape), so the helper is called
+  // directly to cover both shapes regardless of what is installed.
   describe("unwrapping a raw cell slice", () => {
     const cases = [
       ["slice as 3.5 through 3.8 report it", "A", "A"],
@@ -101,6 +101,24 @@ describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
       expect(result).toContain("| \u00a0x | \u3000y |")
     })
 
+    it("keeps a trailing NBSP as cell content", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| x\u00a0| y |"
+      )
+
+      expect(result).toContain("| x\u00a0 | y |")
+    })
+
+    it("keeps a run of NBSP as written", async () => {
+      // Only ASCII spaces are layout. A run that holds NBSP is content, so it
+      // is neither collapsed nor turned into an ASCII space.
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| x\u00a0\u00a0y | z\u00a0 \u00a0w |"
+      )
+
+      expect(result).toContain("| x\u00a0\u00a0y | z\u00a0 \u00a0w |")
+    })
+
     it("compacts a table written without outer pipes", async () => {
       const result = await formatWithPlugin("A | B\n--- | ---\n1 | 2")
 
@@ -129,6 +147,26 @@ describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
       )
 
       expect(result).toContain("`` a  `b`  c ``")
+    })
+
+    it("closes a code span only with a run of the same length", async () => {
+      // Inside `` `a  ``  b` `` the double backtick is content, so the whole
+      // span is protected while the spaces after it are still collapsed.
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| `a  ``  b`  c | d |"
+      )
+
+      expect(result).toContain("| `a  ``  b` c | d |")
+      expectNoLeakedPlaceholder(result)
+    })
+
+    it("treats an opening run that finds no closer as literal text", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| ``x  `y  z` | d |"
+      )
+
+      expect(result).toContain("| ``x `y  z` | d |")
+      expectNoLeakedPlaceholder(result)
     })
 
     it("keeps an unbalanced backtick as written", async () => {
