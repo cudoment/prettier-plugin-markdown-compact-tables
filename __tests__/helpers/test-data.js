@@ -89,9 +89,19 @@ export const mdxJsxTestCases = [
   },
 ]
 
-// 단어 치환 옵션 예시 (`.prettierrc`의 `compactTablesReplacements`와 같은 형식)
+// 단어 보정 옵션 예시 (`.prettierrc`의 `compactTablesReplacements`와 같은 형식)
 export const replacementOptions = {
   compactTablesReplacements: ["동의 항목=>동의항목"],
+}
+
+// 줄바꿈 태그 표기를 통일하고 앞뒤 공백을 정리하는 규칙.
+// 플러그인 내장 동작이 아니라 설정으로 관리한다.
+export const brRule = "/\\s*<br\\s*\\/?>\\s*/gi=><br />"
+
+export const brOptions = { compactTablesReplacements: [brRule] }
+
+export const brAndWordOptions = {
+  compactTablesReplacements: [brRule, "동의 항목=>동의항목"],
 }
 
 // 텍스트 정규화 테스트 케이스

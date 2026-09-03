@@ -275,21 +275,6 @@ const getOriginalNodeRaw = (node, options) => {
   )
 }
 
-const normalizeInlineBreaksInCell = (raw, tagName) => {
-  const openTag = tagName === "th" ? "<th" : "<td"
-  const closeTag = tagName === "th" ? "</th>" : "</td>"
-  const match = raw.match(
-    new RegExp(`^(\\s*${openTag}[^>]*>)([\\s\\S]*?)(${closeTag}\\s*)$`, "i")
-  )
-  if (!match) return normalizeTableBreaks(raw)
-  const [, open, innerRaw, close] = match
-  const normalizedInner = innerRaw.replace(/\s*<br\s*\/?>\s*/gi, "<br />")
-  return `${open}${normalizedInner}${close}`
-}
-
-const normalizeTableBreaks = (raw) =>
-  raw.replace(/\s*<br\s*\/?>\s*/gi, "<br />")
-
 const builtInTransforms = {
   tableCellTrailingSpace: (str) => {
     if (str.includes("|")) {
@@ -346,7 +331,7 @@ const applyTextReplacements = (str, replacements = EMPTY_REPLACEMENTS) => {
 
 const applyTextReplacementsSafely = (
   str,
-  { applyBr = false, replacements = EMPTY_REPLACEMENTS } = {}
+  { replacements = EMPTY_REPLACEMENTS } = {}
 ) => {
   const placeholders = []
   let placeholderIndex = 0
@@ -364,10 +349,6 @@ const applyTextReplacementsSafely = (
   processed = replaceCodeSpans(processed, (match) =>
     addPlaceholder(match, "CODE")
   )
-
-  if (applyBr) {
-    processed = processed.replace(/<br\s*\/?>/gi, "<br />")
-  }
 
   processed = applyTextReplacements(processed, replacements)
 
@@ -388,17 +369,16 @@ const applyTextReplacementsSafely = (
 const normalizeText = (
   str,
   {
-    applyBr = false,
     collapseMultipleSpaces = false,
     trimTableCellTrailingSpace = false,
     replacements = EMPTY_REPLACEMENTS,
   } = {}
 ) => {
-  // Code spans and MDX comments must survive verbatim, so the <br />
-  // normalization and the configured replacements both run through the
-  // placeholder-protected path. Table cells rely on this too: their contents
-  // are full of code spans that document real values.
-  let normalized = applyTextReplacementsSafely(str, { applyBr, replacements })
+  // Code spans and MDX comments must survive verbatim, so the configured
+  // replacements run through the placeholder-protected path. Table cells rely
+  // on this too: their contents are full of code spans that document real
+  // values.
+  let normalized = applyTextReplacementsSafely(str, { replacements })
 
   if (collapseMultipleSpaces) {
     normalized = builtInTransforms.collapseMultipleSpaces(normalized)
@@ -420,13 +400,13 @@ const normalizeTextNodes = (node, replacements = EMPTY_REPLACEMENTS) => {
 
   if (node.type === "jsx" && typeof node.value === "string") {
     if (/<table[\s>]/i.test(node.value) && /<\/table>/i.test(node.value)) {
-      node.value = normalizeTableBreaks(node.value)
+      node.value = applyTextReplacementsSafely(node.value, { replacements })
     }
   }
 
   if (node.type === "html" && typeof node.value === "string") {
     if (isHtmlTable(node.value)) {
-      node.value = normalizeTableBreaks(node.value)
+      node.value = applyTextReplacementsSafely(node.value, { replacements })
     }
   }
 
@@ -521,7 +501,6 @@ function compactTablesPrint(path, options, print) {
     let raw = options.originalText.slice(start.offset, end.offset)
     raw = raw.replace(/([^|\s])(\s+)(\|)/g, "$1$3")
     return normalizeText(raw, {
-      applyBr: true,
       collapseMultipleSpaces: true,
       trimTableCellTrailingSpace: true,
       replacements,
@@ -539,7 +518,6 @@ function compactTablesPrint(path, options, print) {
       options.originalText.slice(start.offset, end.offset)
     )
     return normalizeText(raw, {
-      applyBr: true,
       collapseMultipleSpaces: true,
       trimTableCellTrailingSpace: true,
       replacements,
@@ -577,10 +555,7 @@ function compactTablesPrint(path, options, print) {
       node.position.start.offset,
       node.position.end.offset
     )
-    const normalizedRaw = applyTextReplacementsSafely(raw, {
-      applyBr: true,
-      replacements,
-    })
+    const normalizedRaw = applyTextReplacementsSafely(raw, { replacements })
     if (normalizedRaw !== raw) return normalizedRaw
   }
 
@@ -600,15 +575,16 @@ function compactTablesPrint(path, options, print) {
 
   if (node?.type === "html") {
     const raw = node.value ?? ""
-    if (isHtmlTable(raw)) return normalizeTableBreaks(raw)
-    const normalized = normalizeText(raw, { applyBr: true, replacements })
+    if (isHtmlTable(raw))
+      return applyTextReplacementsSafely(raw, { replacements })
+    const normalized = normalizeText(raw, { replacements })
     if (normalized !== raw) return normalized
   }
 
   if (node?.type === "jsx") {
     const raw = getOriginalNodeRaw(node, options) ?? node.value ?? ""
     if (/<table[\s>]/i.test(raw) && /<\/table>/i.test(raw)) {
-      return normalizeTableBreaks(raw)
+      return applyTextReplacementsSafely(raw, { replacements })
     }
     if (hasFencedCodeBlock(raw)) return raw
   }
@@ -630,16 +606,16 @@ function compactTablesPrint(path, options, print) {
   ) {
     const raw = getOriginalNodeRaw(node, options)
     if (raw != null) {
-      if (node.name === "table") {
-        return normalizeTableBreaks(raw)
+      if (
+        node.name === "table" ||
+        node.name === "td" ||
+        node.name === "th" ||
+        isHtmlTable(raw)
+      ) {
+        return applyTextReplacementsSafely(raw, { replacements })
       }
-      if (node.name === "td" || node.name === "th") {
-        return normalizeInlineBreaksInCell(raw, node.name)
-      }
-      if (isHtmlTable(raw)) return normalizeTableBreaks(raw)
       if (hasFencedCodeBlock(raw)) return raw
       return normalizeText(raw, {
-        applyBr: true,
         collapseMultipleSpaces: true,
         trimTableCellTrailingSpace: true,
         replacements,

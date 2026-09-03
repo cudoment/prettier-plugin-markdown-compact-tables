@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { formatWithPlugin } from "./helpers/test-utils.js"
+import { brOptions } from "./helpers/test-data.js"
 import { unwrapTableCellRaw } from "../index.js"
 
 describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트", () => {
@@ -13,15 +14,50 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       ]
 
       for (const testCase of testCases) {
-        const result = await formatWithPlugin(testCase.input)
+        const result = await formatWithPlugin(
+          testCase.input,
+          "markdown",
+          brOptions
+        )
         expect(result).toContain(testCase.expected)
         expect(result).not.toContain(testCase.input)
       }
     })
 
+    it("BR 태그 앞뒤 공백 정리", async () => {
+      const result = await formatWithPlugin(
+        "| A |\n| --- |\n| 값 <br /> 줄 |",
+        "markdown",
+        brOptions
+      )
+
+      expect(result).toContain("| 값<br />줄 |")
+    })
+
+    it("산문과 줄 끝 BR 태그도 같은 규칙을 따른다", async () => {
+      const result = await formatWithPlugin(
+        "줄1 <br> 줄2\n\n첫 줄 <br>\n둘째 줄",
+        "markdown",
+        brOptions
+      )
+
+      expect(result).toContain("줄1<br />줄2")
+      expect(result).toContain("첫 줄<br />둘째 줄")
+    })
+
+    it("문단 경계는 유지한다", async () => {
+      const result = await formatWithPlugin(
+        "첫 문단<br />\n\n둘째 문단",
+        "markdown",
+        brOptions
+      )
+
+      expect(result).toContain("첫 문단<br />\n\n둘째 문단")
+    })
+
     it("표 셀 안 코드 스팬의 BR 표기는 보존", async () => {
       const input = "| A | B |\n| --- | --- |\n| `<br>` | 값<br>줄 |"
-      const result = await formatWithPlugin(input)
+      const result = await formatWithPlugin(input, "markdown", brOptions)
 
       expect(result).toContain("`<br>`")
       expect(result).toContain("값<br />줄")

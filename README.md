@@ -7,7 +7,7 @@
 A [Prettier](https://prettier.io) plugin that prints Markdown and MDX tables in a compact form, without alignment padding. It hooks into Prettier 3's `markdown` and `mdx` parsers and does two things.
 
 - **Compact tables**: pipes are surrounded by exactly one space, and cells are never padded to match column widths.
-- **Text replacements**: register the spellings you keep getting wrong, as literal strings or regular expressions, and they are corrected on save.
+- **Text replacements**: register the spellings and notations you want fixed, as literal strings or regular expressions, and they are applied on save.
 
 ## Contents
 
@@ -74,7 +74,7 @@ The description cells of `title` and `is_public` are padded out to the width of 
 | `send_mode` row | 215 chars | 208 chars |
 | `is_public` row | 215 chars | 60 chars |
 
-Not a single character of content was added, yet the short lines grew more than fourfold, and every added position is a space.
+Not a single character of content was added, yet the short lines grew three to nine times longer, and every added position is a space.
 
 It also affects review. Adding one sentence to the `send_mode` description recomputes the column widths, so with the default printer **all five lines of the table show up in the diff.** With this plugin, only the line you actually edited does.
 
@@ -124,7 +124,15 @@ To vendor the plugin inside your repository instead of installing it, point at t
 
 ### Recommended setup
 
-The plugin compacts tables regardless of `printWidth`, so you never have to tune `printWidth` for the sake of tables. If you also want prose left unwrapped, apply the following to Markdown and MDX only.
+The plugin compacts tables regardless of `printWidth`, so you never have to tune `printWidth` for the sake of tables. The options below concern the prose around them. Applying them through `overrides` keeps the rest of the repository on your usual formatting.
+
+| Option | Recommended value | Why |
+| --- | --- | --- |
+| `parser` | `"markdown"` for `.md`, `"mdx"` for `.mdx` | Prettier already infers it from the extension, but stating it makes the override self-explanatory |
+| `proseWrap` | `"never"` | Keeps each paragraph on a single line, so editing one word produces a one-line diff |
+| `printWidth` | `99999` | Stops that single line from being folded again. It has no effect on how tables are printed |
+
+**Using Markdown**
 
 ```json
 {
@@ -138,7 +146,18 @@ The plugin compacts tables regardless of `printWidth`, so you never have to tune
         "printWidth": 99999,
         "proseWrap": "never"
       }
-    },
+    }
+  ]
+}
+```
+
+**Using MDX**
+
+```json
+{
+  "plugins": ["prettier-plugin-markdown-compact-tables"],
+  "compactTablesReplacements": ["Javascript=>JavaScript", "Github=>GitHub"],
+  "overrides": [
     {
       "files": "*.mdx",
       "options": {
@@ -151,7 +170,7 @@ The plugin compacts tables regardless of `printWidth`, so you never have to tune
 }
 ```
 
-`proseWrap: "never"` keeps each paragraph on a single line. The large `printWidth` only stops that line from being folded again; it has no effect on how tables are printed.
+A project that carries both formats lists both entries in `overrides`. `compactTablesReplacements` sits outside `overrides`, so a single list of rules covers every document.
 
 ## Running it
 
@@ -189,9 +208,8 @@ Table compaction has no option of its own: registering the plugin turns it on.
 | Unicode spaces in a cell | NBSP and ideographic space are content, so they are kept as written |
 | Trailing space in a cell | Removed |
 | Alignment markers | `:--`, `:-:` and `--:` are preserved as written |
-| Line-break tags inside a cell | Normalized to `<br />` regardless of how they were written |
 
-`<br>`, `<br/>`, `<BR>` and `<br >` all become `<br />`.
+Line-break tags are not rewritten here. Unifying `<br>`, `<br/>` and `<BR>` into a single spelling is a replacement rule you register, described in [Unifying line-break tags](#unifying-line-break-tags).
 
 ### What is left untouched
 
@@ -249,10 +267,33 @@ Prose in the body and in table cells is corrected, while anything wrapped in cod
 
 With the regular expression above, `Max 50` becomes `Maximum: 50`. The `g` flag is added automatically when omitted, so every occurrence is replaced.
 
+### Unifying line-break tags
+
+Line-break tags used to be normalized by the plugin itself. That behavior is a replacement rule now, so a project that has settled on a different spelling is not overruled.
+
+<!-- prettier-ignore -->
+```json
+{
+  "compactTablesReplacements": ["/<br\\s*\\/?>/gi=><br />"]
+}
+```
+
+With that rule `<br>`, `<br/>`, `<BR>` and `<br >` all become `<br />`. To drop the spaces around the tag as well, widen the pattern.
+
+<!-- prettier-ignore -->
+```json
+{
+  "compactTablesReplacements": ["/\\s*<br\\s*\\/?>\\s*/gi=><br />"]
+}
+```
+
+`line one <br /> line two` then becomes `line one<br />line two`. Replacements run per paragraph and per cell, so the blank line between two paragraphs is never swallowed.
+
 ### Notes for both formats
 
 - Inline code, code blocks and MDX comments are never replaced. Wrap a string that must survive verbatim, such as a value an API really returns, in code markup and it is protected.
 - Nothing is trimmed, so leading and trailing spaces are part of the rule.
+- In a JSON configuration file every backslash in the pattern is written twice, because JSON uses the backslash as an escape character itself. The rule `/<br\s*\/?>/gi=><br />` is stored as `"/<br\\s*\\/?>/gi=><br />"`.
 - The separator is the first `=>` in a literal rule, and the `=>` after the flags in a regular expression rule. The replacement itself may contain `=>`.
 - Rules are applied in array order, and the output of one rule is the input of the next.
 - An entry without a separator, with an empty left side, or with an invalid regular expression is ignored. An entry that starts with `/` but is not a valid regular expression is treated as a literal rule, so a path rewrite such as `/docs/guide=>/docs/tutorial` works as expected.
@@ -278,7 +319,7 @@ npx prettier --write "**/*.md" --compact-tables-replacements "Javascript=>JavaSc
 
 | Prettier | Status |
 | --- | --- |
-| 3.5.3 ~ 3.9.x | Supported. All 93 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
+| 3.5.3 ~ 3.9.x | Supported. All 96 tests pass on 3.5.3, 3.6.2, 3.7.4, 3.8.1, 3.9.0 and 3.9.6 |
 
 Prettier 3.9 changed `tableCell` positions to cover the surrounding pipes, which the plugin accounts for. The two versions produce byte-identical output: formatting a corpus of 517 real documents with 3.8.1 and with 3.9.6 gives the same result for every file.
 

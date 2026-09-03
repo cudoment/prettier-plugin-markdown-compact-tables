@@ -20,13 +20,19 @@ import {
   textNormalizationTestCases,
   integrationTestCases,
   replacementOptions,
+  brOptions,
+  brAndWordOptions,
 } from "./helpers/test-data.js"
 
 describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
   describe("1. BR 태그 정규화", () => {
     brTagTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
-        const result = await formatWithPlugin(testCase.input)
+        const result = await formatWithPlugin(
+          testCase.input,
+          "markdown",
+          brOptions
+        )
         expectBrTagNormalization(result)
         expect(result.trim()).toBe(testCase.expected)
       })
@@ -36,7 +42,11 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
   describe("2. 테이블 포맷팅", () => {
     tableTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
-        const result = await formatWithPlugin(testCase.input)
+        const result = await formatWithPlugin(
+          testCase.input,
+          "markdown",
+          brOptions
+        )
 
         // 테이블 구조 검증
         expect(result).toContain("|")
@@ -192,7 +202,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     it("MDX JSX table 내부 <br> 정규화", async () => {
       const input =
         "<table><tr><td>값<br>줄</td></tr></table>\n<table><tr><th>헤더<br/>줄</th></tr></table>"
-      const result = await formatWithPlugin(input, "mdx")
+      const result = await formatWithPlugin(input, "mdx", brOptions)
 
       expect(result).toContain("<br />")
       expect(result).not.toContain("<br>")
@@ -315,7 +325,11 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
   describe("8. 통합 시나리오", () => {
     integrationTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
-        const result = await formatWithPlugin(testCase.input)
+        const result = await formatWithPlugin(
+          testCase.input,
+          "markdown",
+          brOptions
+        )
 
         testCase.expectedContains.forEach((expected) => {
           expect(result).toContain(expected)
@@ -361,7 +375,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
 
 동의 항목 확인`
 
-      const result = await formatWithPlugin(input, "mdx", replacementOptions)
+      const result = await formatWithPlugin(input, "mdx", brAndWordOptions)
 
       expect(result).toContain("# 제목")
       expectMdxCommentPreservation(result, ["{/* 주석 */}"])
@@ -386,7 +400,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
   describe("10. HTML 테이블 정규화", () => {
     it("HTML table 내부 <br> 정규화", async () => {
       const input = "<table><tr><td>a<br>b</td></tr></table>"
-      const result = await formatWithPlugin(input, "markdown")
+      const result = await formatWithPlugin(input, "markdown", brOptions)
 
       expect(result).toContain("<br />")
       expect(result).not.toContain("<br>")
