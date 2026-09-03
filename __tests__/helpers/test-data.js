@@ -1,86 +1,96 @@
-// 테이블 포맷팅 테스트 케이스
+// Table formatting cases
 export const tableTestCases = [
   {
-    name: "기본 테이블",
+    name: "plain table",
     input: "| A | B |\n| --- | --- |\n| 1 | 2 |",
     expected: "| A | B |\n| --- | --- |\n| 1 | 2 |",
   },
   {
-    name: "정렬 테이블",
-    input: "| 왼쪽 | 가운데 | 오른쪽 |\n| :-- | :-: | --: |\n| L | C | R |",
+    name: "alignment markers",
+    input: "| Left | Center | Right |\n| :-- | :-: | --: |\n| L | C | R |",
     expectedHeaders: [
-      "| 왼쪽 | 가운데 | 오른쪽 |",
+      "| Left | Center | Right |",
       "| :-- | :-: | --: |",
       "| L | C | R |",
     ],
   },
   {
-    name: "복잡한 테이블",
+    name: "inline markup inside cells",
     input:
-      "| 헤더1 | 헤더2<br/>서브 | 헤더3 |\n| --- | --- | --- |\n| **굵게** | `코드` | [링크](url) |",
-    expected: "| 헤더1 | 헤더2<br/>서브 | 헤더3 |",
+      "| Head1 | Head2<br/>Sub | Head3 |\n| --- | --- | --- |\n| **bold** | `code` | [link](url) |",
+    expected: "| Head1 | Head2<br/>Sub | Head3 |",
+  },
+  {
+    name: "single column",
+    input: "| Only |\n| --- |\n| 1 |",
+    expected: "| Only |\n| --- |\n| 1 |",
+  },
+  {
+    name: "header and delimiter with no body rows",
+    input: "| A | B |\n| --- | --- |",
+    expected: "| A | B |\n| --- | --- |",
   },
 ]
 
-// MDX 주석 테스트 케이스
+// MDX comment cases
 export const mdxCommentTestCases = [
   {
-    name: "단일 라인 MDX 주석",
-    input: "{/* 이것은 주석입니다 */}",
-    expected: "{/* 이것은 주석입니다 */}",
+    name: "single line comment",
+    input: "{/* this is a comment */}",
+    expected: "{/* this is a comment */}",
   },
   {
-    name: "멀티라인 MDX 주석",
-    input: "{/*\n여러 줄\n주석입니다\n*/}",
-    expected: "{/*\n여러 줄\n주석입니다\n*/}",
+    name: "multi line comment",
+    input: "{/*\nseveral\nlines\n*/}",
+    expected: "{/*\nseveral\nlines\n*/}",
   },
   {
-    name: "텍스트와 함께 있는 MDX 주석",
-    input: "일반 텍스트\n{/* 주석 */}\n더 많은 텍스트",
-    expected: "{/* 주석 */}",
+    name: "comment between paragraphs",
+    input: "plain text\n{/* comment */}\nmore text",
+    expected: "{/* comment */}",
   },
 ]
 
-// 불완전한 파이프 테이블 테스트 케이스
+// Pipe lines that are not read as a table, because the delimiter row is absent
 export const incompletePipeTableTestCases = [
   {
-    name: "구분선 없는 파이프 테이블",
-    input: "| 헤더1 | 헤더2 |\n| 데이터1 | 데이터2 |",
-    expected: "| 헤더1 | 헤더2 |\n| 데이터1 | 데이터2 |",
+    name: "no delimiter row",
+    input: "| Head1 | Head2 |\n| Data1 | Data2 |",
+    expected: "| Head1 | Head2 |\n| Data1 | Data2 |",
   },
   {
-    name: "공백이 있는 불완전한 테이블",
-    input: " | 항목 | 값 |\n | A | B |",
-    expected: " | 항목 | 값 |\n | A | B |",
+    name: "indented rows without a delimiter row",
+    input: " | Item | Value |\n | A | B |",
+    expected: " | Item | Value |\n | A | B |",
   },
 ]
 
-// MDX JSX 엘리먼트 테스트 케이스
+// MDX/JSX elements
 export const mdxJsxTestCases = [
   {
-    name: "MDX JSX 텍스트 엘리먼트",
-    input: "<Button>클릭</Button>",
-    expected: "<Button>클릭</Button>",
+    name: "text element",
+    input: "<Button>Click</Button>",
+    expected: "<Button>Click</Button>",
   },
   {
-    name: "MDX JSX 플로우 엘리먼트",
-    input: '<InfoBox type="note">정보</InfoBox>',
-    expected: '<InfoBox type="note">정보</InfoBox>',
+    name: "flow element with an attribute",
+    input: '<InfoBox type="note">Info</InfoBox>',
+    expected: '<InfoBox type="note">Info</InfoBox>',
   },
 ]
 
-// 통합 테스트 케이스
+// A page shaped like real API reference documentation
 export const integrationTestCases = [
   {
-    name: "개발자 문서 스타일",
-    input: `## API 설명
+    name: "API reference page",
+    input: `## Request
 
-| 매개변수 | 타입 | 설명 | 필수 |
+| Name | Type | Description | Required |
 | --- | --- | --- | --- |
-| app_key | String | 앱 REST API 키<br>[애플리케이션] > [API 키]에서 확인 | O |
-| user_id | Long | 사용자 ID<br>**주의**: 민감한 정보 | O |
+| app_key | String | REST API key<br>Found under [My application] > [App keys] | O |
+| user_id | Long | Service user id<br>**Note**: treat as sensitive | O |
 
-{/* API 호출 예시 */}
+{/* request sample */}
 
 \`\`\`json
 {
@@ -88,9 +98,9 @@ export const integrationTestCases = [
 }
 \`\`\``,
     expectedContains: [
-      "| 매개변수 | 타입 | 설명 | 필수 |",
+      "| Name | Type | Description | Required |",
       "<br>",
-      "{/* API 호출 예시 */}",
+      "{/* request sample */}",
       "```json",
     ],
   },

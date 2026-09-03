@@ -1,23 +1,30 @@
 import { describe, it, expect } from "vitest"
-import { formatWithPlugin } from "./helpers/test-utils.js"
+import {
+  formatWithPlugin,
+  expectIdempotent,
+  expectNoLeakedPlaceholder,
+} from "./helpers/test-utils.js"
 import { unwrapTableCellRaw } from "../index.js"
 
-describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트", () => {
-  // 저장소가 쓰는 Prettier 버전은 셀 조각에 파이프를 포함하지 않으므로,
-  // 3.9가 만드는 조각 형태는 헬퍼를 직접 호출해 검증한다.
-  describe("셀 조각 해제", () => {
+describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
+  // The Prettier version this repository installs may not produce the wrapped
+  // cell slice that 3.9 introduced, so the helper is called directly to cover
+  // both shapes.
+  describe("unwrapping a raw cell slice", () => {
     const cases = [
-      ["3.5~3.8 형태의 조각", "A", "A"],
-      ["3.9 첫 셀 조각", "| A ", "A"],
-      ["3.9 마지막 셀 조각", "| B |", "B"],
-      ["행 끝 공백이 붙은 조각", "| 2 |   ", "2"],
-      ["행 끝 탭이 붙은 조각", "| 2 |\t", "2"],
-      ["파이프 하나뿐인 조각", "|", ""],
-      ["이스케이프된 파이프로 끝나는 셀", "| b\\| ", "b\\|"],
-      ["이스케이프된 백슬래시 뒤 구분자", "| b\\\\ |", "b\\\\"],
-      ["선두 NBSP 보존", "|  x ", " x"],
-      ["선두 전각 공백 보존", "| 　x ", "　x"],
-      ["말미 NBSP 보존", "| x  |", "x "],
+      ["slice as 3.5 through 3.8 report it", "A", "A"],
+      ["first cell slice on 3.9", "| A ", "A"],
+      ["last cell slice on 3.9", "| B |", "B"],
+      ["trailing spaces past the closing pipe", "| 2 |   ", "2"],
+      ["trailing tab past the closing pipe", "| 2 |\t", "2"],
+      ["slice that is nothing but a pipe", "|", ""],
+      ["cell ending in an escaped pipe", "| b\\| ", "b\\|"],
+      ["escaped backslash before the closing pipe", "| b\\\\ |", "b\\\\"],
+      ["leading NBSP is content, not padding", "|\u00a0x ", "\u00a0x"],
+      ["leading ideographic space is content", "|\u3000x ", "\u3000x"],
+      ["trailing NBSP is content", "| x\u00a0|", "x\u00a0"],
+      ["empty cell", "|  |", ""],
+      ["cell holding only an escaped pipe", "| \\| |", "\\|"],
     ]
 
     cases.forEach(([name, raw, expected]) => {
@@ -27,109 +34,8 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
     })
   })
 
-  describe("파서 전처리 테스트", () => {
-    it("MDX 주석 임시 변환", async () => {
-      const input = "{/* 테스트 주석 */}"
-      const result = await formatWithPlugin(input)
-
-      expect(result).toContain("{/* 테스트 주석 */}")
-      expect(result).not.toContain("<!--")
-      expect(result).not.toContain("-->")
-    })
-  })
-
-  describe("프린터 핵심 로직 테스트", () => {
-    it("테이블 정렬 처리", async () => {
-      const input =
-        "| 왼쪽 | 가운데 | 오른쪽 |\n| :-- | :-: | --: |\n| A | B | C |"
-      const result = await formatWithPlugin(input)
-
-      expect(result).toContain(":--")
-      expect(result).toContain(":-:")
-      expect(result).toContain("--:")
-    })
-
-    it("불완전한 파이프 테이블 보존", async () => {
-      const input = "| 헤더1 | 헤더2 |\n| 데이터1 | 데이터2 |"
-      const result = await formatWithPlugin(input)
-
-      // 원본 형태가 보존되어야 함 (구분선이 없으므로)
-      expect(result.trim()).toBe(input)
-    })
-
-    it("MDX JSX 엘리먼트 보존", async () => {
-      const input = '<Button type="primary">클릭하세요</Button>'
-      const result = await formatWithPlugin(input, "mdx")
-
-      expect(result).toContain('<Button type="primary">클릭하세요</Button>')
-    })
-  })
-
-  describe("성능 및 안정성 테스트", () => {
-    it("대용량 테이블 처리", async () => {
-      const largeTable = Array(100)
-        .fill(0)
-        .map((_, i) => `| 데이터${i} | 값${i} |`)
-        .join("\n")
-      const input = "| 헤더1 | 헤더2 |\n| --- | --- |\n" + largeTable
-
-      const result = await formatWithPlugin(input)
-      expect(result).toContain("| 헤더1 | 헤더2 |")
-      expect(result).toContain("| 데이터99 | 값99 |")
-    })
-
-    it("특수 문자 처리", async () => {
-      const input = "| 특수문자 | 값 |\n| --- | --- |\n| & < > \" ' | 테스트 |"
-      const result = await formatWithPlugin(input)
-
-      expect(result).toContain("| 특수문자 | 값 |")
-      expect(result).toContain("| & < > \" ' | 테스트 |")
-    })
-  })
-
-  describe("회귀 테스트", () => {
-    it("인라인 코드 공백 보존", async () => {
-      const input = `| A | B |
-| --- | --- |
-| \`a  b\` | c |`
-      const result = await formatWithPlugin(input)
-      expect(result).toContain("`a  b`")
-    })
-
-    it("플레이스홀더 충돌 방지", async () => {
-      const input = `| H | V |
-| --- | --- |
-| \`__TAG_0__\` <span>hi</span> | ok |`
-      const result = await formatWithPlugin(input)
-      expect(result).toContain("`__TAG_0__`")
-      expect(result).toContain("<span>hi</span>")
-    })
-
-    it("비교 연산자와 BR 태그가 함께 있어도 인라인 코드 플레이스홀더가 복구된다", async () => {
-      const input = `| H | V |
-| --- | --- |
-| \`-1435\` < reminder value <= \`43200\` <br />next | ok |`
-      const result = await formatWithPlugin(input)
-
-      expect(result).toContain("`-1435`")
-      expect(result).toContain("`43200`")
-      expect(result).not.toContain("__COMPACT_TABLES_PLACEHOLDER_")
-    })
-
-    it("컬럼 수 불일치 테이블은 원문 보존", async () => {
-      const input = `| A | B |
-| --- | --- |
-| 1 |`
-      const withPlugin = await formatWithPlugin(input)
-      expect(withPlugin.trim()).toBe(input)
-    })
-  })
-
-  // Prettier 3.9 reports tableCell positions with the surrounding pipes
-  // included, so unwrapping the raw slice has to survive escaped pipes and
-  // escaped backslashes at the cell boundary.
-  describe("셀 구분자 처리", () => {
-    it("셀마다 파이프를 하나씩만 출력한다", async () => {
+  describe("cell delimiters", () => {
+    it("emits exactly one pipe per cell boundary", async () => {
       const result = await formatWithPlugin(
         "| A | B |\n| --- | --- |\n| 1 | 2 |"
       )
@@ -137,7 +43,7 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
     })
 
-    it("이스케이프된 파이프로 끝나는 셀을 보존한다", async () => {
+    it("keeps a cell that ends in an escaped pipe", async () => {
       const result = await formatWithPlugin(
         "| A | B |\n| --- | --- |\n| 1 | b\\| |"
       )
@@ -145,7 +51,7 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result).toContain("| 1 | b\\| |")
     })
 
-    it("이스케이프된 백슬래시 뒤의 닫는 파이프는 구분자로 처리한다", async () => {
+    it("treats the pipe after an escaped backslash as a delimiter", async () => {
       const result = await formatWithPlugin(
         "| A | B |\n| --- | --- |\n| 1 | b\\\\|"
       )
@@ -153,7 +59,7 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result).toContain("| 1 | b\\\\ |")
     })
 
-    it("셀이 이스케이프된 파이프 하나뿐이어도 보존한다", async () => {
+    it("keeps a cell whose only content is an escaped pipe", async () => {
       const result = await formatWithPlugin(
         "| A | B |\n| --- | --- |\n| \\| | \\| |"
       )
@@ -161,7 +67,15 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result).toContain("| \\| | \\| |")
     })
 
-    it("행 끝 공백이 있어도 셀 구분자를 정리한다", async () => {
+    it("keeps an escaped pipe inside a code span", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | `a\\|b` |"
+      )
+
+      expect(result).toContain("`a\\|b`")
+    })
+
+    it("drops spaces left past the end of a row", async () => {
       const result = await formatWithPlugin(
         "| A | B |\n| --- | --- |\n| 1 | 2 |   "
       )
@@ -169,7 +83,7 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
     })
 
-    it("헤더 끝 공백이 있어도 표 구조를 유지한다", async () => {
+    it("drops spaces left past the end of the header", async () => {
       const result = await formatWithPlugin(
         "| A | B |  \n| --- | --- |\n| 1 | 2 |"
       )
@@ -177,24 +91,197 @@ describe("prettier-plugin-markdown-compact-tables 핵심 기능 단위 테스트
       expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
     })
 
-    it("셀 선두의 유니코드 공백은 보존한다", async () => {
+    it("keeps Unicode spaces at the start of a cell", async () => {
+      // The printer always puts one ASCII space after the pipe, so the NBSP and
+      // the ideographic space that follow it are cell content that survived.
       const result = await formatWithPlugin(
-        "| A | B |\n| --- | --- |\n|  x | 　y |"
+        "| A | B |\n| --- | --- |\n|\u00a0x |\u3000y |"
       )
 
-      expect(result).toContain("|  x | 　y |")
+      expect(result).toContain("| \u00a0x | \u3000y |")
     })
 
-    it("바깥 파이프가 없는 표도 압축한다", async () => {
+    it("compacts a table written without outer pipes", async () => {
       const result = await formatWithPlugin("A | B\n--- | ---\n1 | 2")
 
       expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
     })
 
-    it("파이프에 공백이 없는 표도 압축한다", async () => {
+    it("compacts a table written without spaces around pipes", async () => {
       const result = await formatWithPlugin("|A|B|\n|---|---|\n|1|2|")
 
       expect(result.trim()).toBe("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    })
+  })
+
+  describe("what the printer protects inside a cell", () => {
+    it("keeps the spacing inside a code span", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| `a  b` | c |"
+      )
+
+      expect(result).toContain("`a  b`")
+    })
+
+    it("keeps the spacing inside a multi-backtick code span", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| `` a  `b`  c `` | d |"
+      )
+
+      expect(result).toContain("`` a  `b`  c ``")
+    })
+
+    it("keeps an unbalanced backtick as written", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| a  `b | c |"
+      )
+
+      expect(result).toContain("| a `b | c |")
+      expectNoLeakedPlaceholder(result)
+    })
+
+    it("keeps the spacing inside an HTML tag", async () => {
+      const result = await formatWithPlugin(
+        '| A | B |\n| --- | --- |\n| <span  class="x">t</span>  u | c |'
+      )
+
+      expect(result).toContain('<span  class="x">t</span> u')
+    })
+
+    it("keeps a character entity intact", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| a &nbsp;  b | c |"
+      )
+
+      expect(result).toContain("&nbsp;")
+    })
+
+    it("restores code spans even when comparison operators surround them", async () => {
+      const result = await formatWithPlugin(
+        "| H | V |\n| --- | --- |\n| `-1435` < value <= `43200` <br />next | ok |"
+      )
+
+      expect(result).toContain("`-1435`")
+      expect(result).toContain("`43200`")
+      expectNoLeakedPlaceholder(result)
+    })
+
+    it("survives a document that already contains the internal token", async () => {
+      // The placeholder prefix is regenerated until it is absent from the
+      // input, so a document mentioning it must still round-trip.
+      const token = "__COMPACT_TABLES_PLACEHOLDER_abc123__CODE_0__"
+      const result = await formatWithPlugin(
+        `| H | V |\n| --- | --- |\n| ${token} | \`x  y\` |`
+      )
+
+      expect(result).toContain(token)
+      expect(result).toContain("`x  y`")
+    })
+  })
+
+  describe("structures left as written", () => {
+    it("keeps pipe lines that have no delimiter row", async () => {
+      const input = "| Head1 | Head2 |\n| Data1 | Data2 |"
+      const result = await formatWithPlugin(input)
+
+      expect(result.trim()).toBe(input)
+    })
+
+    it("keeps a table whose row has too few cells", async () => {
+      const input = "| A | B |\n| --- | --- |\n| 1 |"
+      const result = await formatWithPlugin(input)
+
+      expect(result.trim()).toBe(input)
+    })
+
+    it("keeps an MDX comment as written", async () => {
+      const result = await formatWithPlugin("{/* a comment */}")
+
+      expect(result).toContain("{/* a comment */}")
+      expect(result).not.toContain("<!--")
+    })
+
+    it("keeps an unterminated MDX comment opener as written", async () => {
+      const input = "{/* opened and never closed\n\n| A | B |\n| --- | --- |"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result).toContain("{/* opened and never closed")
+    })
+
+    it("leaves a stray closing sequence alone when it closes no comment", async () => {
+      // `fixLeakedPipeAfterMdxCommentClose` only acts on a pipe that trails a
+      // real comment close, matched against the ranges found in the source.
+      const input = "| A |\n| --- |\n| text \\*/} |"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result).toContain("\\*/}")
+    })
+
+    it("keeps an MDX/JSX element as written", async () => {
+      const result = await formatWithPlugin(
+        '<Button type="primary">Click</Button>',
+        "mdx"
+      )
+
+      expect(result).toContain('<Button type="primary">Click</Button>')
+    })
+  })
+
+  describe("alignment", () => {
+    it("keeps every alignment marker", async () => {
+      const result = await formatWithPlugin(
+        "| Left | Center | Right |\n| :-- | :-: | --: |\n| A | B | C |"
+      )
+
+      expect(result).toContain(":--")
+      expect(result).toContain(":-:")
+      expect(result).toContain("--:")
+    })
+
+    it("normalizes a long delimiter row to three dashes", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| ---------- | :--------: |\n| 1 | 2 |"
+      )
+
+      expect(result).toContain("| --- | :-: |")
+    })
+  })
+
+  describe("scale and stability", () => {
+    it("handles a table with a hundred rows", async () => {
+      const rows = Array.from(
+        { length: 100 },
+        (_, i) => `| Data${i} | Value${i} |`
+      ).join("\n")
+      const result = await formatWithPlugin(
+        `| Head1 | Head2 |\n| --- | --- |\n${rows}`
+      )
+
+      expect(result).toContain("| Head1 | Head2 |")
+      expect(result).toContain("| Data99 | Value99 |")
+    })
+
+    it("keeps characters that are markup elsewhere", async () => {
+      const input = "| Symbols | Value |\n| --- | --- |\n| & < > \" ' | ok |"
+      const result = await formatWithPlugin(input)
+
+      expect(result).toContain("| Symbols | Value |")
+      expect(result).toContain("| & < > \" ' | ok |")
+    })
+
+    it("formats the same table twice with the same result", async () => {
+      await expectIdempotent(
+        "|A|B|\n|---|---|\n| 1  | `a  b` |   \n\n| C |\n| --- |\n| 2 |"
+      )
+    })
+
+    it("handles CRLF line endings", async () => {
+      const result = await formatWithPlugin(
+        "| A  | B |\r\n| --- | --- |\r\n| 1 | 2 |\r\n"
+      )
+
+      expect(result).toContain("| A | B |")
+      expect(result).toContain("| 1 | 2 |")
     })
   })
 })

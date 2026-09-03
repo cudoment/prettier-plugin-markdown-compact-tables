@@ -3,6 +3,7 @@ import { compile } from "@mdx-js/mdx"
 import {
   formatWithPlugin,
   formatWithoutPlugin,
+  expectIdempotent,
   expectTableStructure,
   expectMdxCommentPreservation,
   expectTableAlignment,
@@ -18,29 +19,26 @@ import {
   integrationTestCases,
 } from "./helpers/test-data.js"
 
-describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
-  describe("1. 테이블 포맷팅", () => {
+describe("prettier-plugin-markdown-compact-tables", () => {
+  describe("1. table compaction", () => {
     tableTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
 
-        // 테이블 구조 검증
         expect(result).toContain("|")
         expectTableAlignment(result)
 
-        // 특정 헤더 검증
         if (testCase.expected) {
           expect(result).toContain(testCase.expected.split("\n")[0])
         }
 
-        // 정렬 테이블의 경우 전체 테이블 검증
         if (testCase.expectedHeaders) {
           expectTableStructure(result, testCase.expectedHeaders)
         }
       })
     })
 
-    it("테이블 셀의 끝 공백을 제거해야 함", async () => {
+    it("adds no padding to match column widths", async () => {
       const input = "| A  | B   |\n| --- | --- |\n| C  | D   |"
       const result = await formatWithPlugin(input)
 
@@ -49,10 +47,28 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       expect(result).not.toContain("| A  | B   |")
     })
 
-    it("테이블 셀의 중복 공백 정리와 코드/태그 보존", async () => {
-      const input = `| H | V |
-| --- | --- |
-| A  B | \`code  span\` <span  class="x">tag</span> &nbsp;  |`
+    it("pads nothing even when one cell is far longer than the others", async () => {
+      const input = [
+        "| Name | Description | Required |",
+        "| --- | --- | --- |",
+        "| title | Notification title | O |",
+        "| send_mode | Delivery mode<br />- `0`: send now<br />- `1`: schedule<br />**Note**: defaults to `0` | X |",
+        "| is_public | Whether the notice is public | X |",
+      ].join("\n")
+      const result = await formatWithPlugin(input)
+
+      expect(result.trim()).toBe(input)
+      // The short rows stay short: no line is stretched to the longest one.
+      const lines = result.trim().split("\n")
+      expect(lines[2].length).toBeLessThan(lines[3].length / 2)
+    })
+
+    it("collapses repeated spaces while protecting code, tags and entities", async () => {
+      const input = [
+        "| H | V |",
+        "| --- | --- |",
+        '| A  B | `code  span` <span  class="x">tag</span> &nbsp;  |',
+      ].join("\n")
 
       const result = await formatWithPlugin(input)
 
@@ -61,9 +77,18 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       expect(result).toContain('<span  class="x">tag</span>')
       expect(result).toContain("&nbsp;")
     })
+
+    it("does not pad a table whose cells hold wide characters", async () => {
+      // East Asian characters are two columns wide on screen, which is what the
+      // built-in printer aligns on. Compaction has to ignore display width.
+      const input = "| 이름 | 값 |\n| --- | --- |\n| a | b |"
+      const result = await formatWithPlugin(input)
+
+      expect(result.trim()).toBe(input)
+    })
   })
 
-  describe("2. MDX 주석 보존", () => {
+  describe("2. MDX comments", () => {
     mdxCommentTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
@@ -71,70 +96,84 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       })
     })
 
-    it("MDX 주석과 일반 텍스트 혼합", async () => {
-      const input = "일반 텍스트\n{/* 주석 */}\n더 많은 텍스트"
+    it("keeps a comment that sits between two paragraphs", async () => {
+      const input = "plain text\n{/* comment */}\nmore text"
       const result = await formatWithPlugin(input)
 
-      expect(result).toContain("일반 텍스트")
-      expect(result).toContain("{/* 주석 */}")
-      expect(result).toContain("더 많은 텍스트")
-      expectMdxCommentPreservation(result, ["{/* 주석 */}"])
+      expect(result).toContain("plain text")
+      expect(result).toContain("more text")
+      expectMdxCommentPreservation(result, ["{/* comment */}"])
     })
 
-    it("테이블 행을 주석 처리한 경우 원문을 보존해야 함", async () => {
-      const input = `| 카테고리 상세 | API |
-| --- | --- |
-{/* | 채널 메시지 | [사용자 정의 템플릿으로 메시지 발송](/docs/latest/ko/channel-message/rest-api) | */}`
+    it("keeps a commented-out table row as written", async () => {
+      const input = [
+        "| Category | API |",
+        "| --- | --- |",
+        "{/* | Channel message | [Send with a custom template](/docs/channel-message/rest-api) | */}",
+      ].join("\n")
 
       const result = await formatWithPlugin(input, "mdx")
 
       expect(result).toContain(
-        "{/* | 채널 메시지 | [사용자 정의 템플릿으로 메시지 발송](/docs/latest/ko/channel-message/rest-api) | */}"
+        "{/* | Channel message | [Send with a custom template](/docs/channel-message/rest-api) | */}"
       )
       expect(result).not.toContain("| {/*")
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
     })
 
-    it("MDX 주석 안에 테이블이 있어도 변형되지 않아야 함", async () => {
-      const input = `{/* ## 채널 메시지 발송기 (#channel-message-batch)
-
-| 카테고리 상세 | API |
-| --- | --- |
-| 채널 메시지 발송기 | [메시지 대량 발송](/docs/latest/ko/platform/rest-api#channel-message-broadcast) | */}`
+    it("keeps a whole table that lives inside a comment", async () => {
+      const input = [
+        "{/* ## Channel message batch (#channel-message-batch)",
+        "",
+        "| Category | API |",
+        "| --- | --- |",
+        "| Channel message batch | [Broadcast](/docs/platform/rest-api#broadcast) | */}",
+      ].join("\n")
 
       const result = await formatWithPlugin(input, "mdx")
 
-      // 주석 경계 밖으로 파이프가 새지 않아야 함 (회귀 방지)
+      // A pipe must not leak past the comment close, which would break MDX.
       expect(result).not.toContain("*/} |")
       expect(result.trim()).toBe(input)
-
-      // 결과물이 실제 MDX 파서에서도 유효해야 함
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
     })
 
-    it("깨진 `*/} |` 케이스는 자동으로 복구되어야 함", async () => {
-      const broken = `{/* ## 채널 메시지 발송기 (#channel-message-batch)
-
-| 카테고리 상세 | API |
-| --- | --- |
-| 채널 메시지 발송기 | [메시지 대량 발송](/docs/latest/ko/platform/rest-api#channel-message-broadcast) | */} |`
-
-      const fixed = `{/* ## 채널 메시지 발송기 (#channel-message-batch)
-
-| 카테고리 상세 | API |
-| --- | --- |
-| 채널 메시지 발송기 | [메시지 대량 발송](/docs/latest/ko/platform/rest-api#channel-message-broadcast) | */}`
+    it("repairs a stray pipe left after a comment close", async () => {
+      const rows = [
+        "{/* ## Channel message batch (#channel-message-batch)",
+        "",
+        "| Category | API |",
+        "| --- | --- |",
+        "| Channel message batch | [Broadcast](/docs/platform/rest-api#broadcast) | */}",
+      ]
+      const broken = rows.join("\n") + " |"
+      const fixed = rows.join("\n")
 
       const result = await formatWithPlugin(broken, "mdx")
 
       expect(result).not.toContain("*/} |")
       expect(result.trim()).toBe(fixed)
-
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
+    })
+
+    it("formats a document holding a commented table twice with the same result", async () => {
+      const input = [
+        "{/* ## Batch",
+        "",
+        "| Category | API |",
+        "| --- | --- |",
+        "| Batch | [Broadcast](/docs/broadcast) | */}",
+        "",
+        "| A  | B |",
+        "| --- | --- |",
+        "| 1 | 2 |",
+      ].join("\n")
+
+      await expectIdempotent(input, "mdx")
     })
   })
 
-  describe("3. 불완전한 파이프 테이블 보존", () => {
+  describe("3. pipe lines that are not a table", () => {
     incompletePipeTableTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
@@ -142,27 +181,23 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       })
     })
 
-    it("컬럼 수 불일치 테이블은 원문 보존", async () => {
-      const input = `| A | B |
-| --- | --- |
-| 1 |`
+    it("keeps a table whose row has too few cells", async () => {
+      const input = "| A | B |\n| --- | --- |\n| 1 |"
       const result = await formatWithPlugin(input)
 
       expect(result.trim()).toBe(input)
       expect(result).not.toContain("| A   | B   |")
     })
 
-    it("컬럼 수 초과 행도 원문 보존", async () => {
-      const input = `| A | B |
-| --- | --- |
-| 1 | 2 | 3 |`
+    it("keeps a table whose row has too many cells", async () => {
+      const input = "| A | B |\n| --- | --- |\n| 1 | 2 | 3 |"
       const result = await formatWithPlugin(input)
 
       expect(result.trim()).toBe(input)
     })
   })
 
-  describe("4. MDX JSX 엘리먼트 처리", () => {
+  describe("4. MDX and JSX elements", () => {
     mdxJsxTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input, "mdx")
@@ -170,65 +205,91 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       })
     })
 
-    it("MDX JSX table 은 원문 그대로 보존", async () => {
+    it("keeps a JSX table as written", async () => {
       const input =
-        "<table><tr><td>값<br>줄</td></tr></table>\n<table><tr><th>헤더<br/>줄</th></tr></table>"
+        "<table><tr><td>a<br>b</td></tr></table>\n<table><tr><th>h<br/>i</th></tr></table>"
       const result = await formatWithPlugin(input, "mdx")
 
       expect(result.trim()).toBe(input)
     })
 
-    it("MDX JSX 일반 요소에서도 중복 공백 정리", async () => {
-      const input = "<InfoBox>값  값</InfoBox>"
-      const result = await formatWithPlugin(input, "mdx")
+    it("collapses repeated spaces in an ordinary JSX element", async () => {
+      const result = await formatWithPlugin("<InfoBox>a  b</InfoBox>", "mdx")
 
-      expect(result).toContain("<InfoBox>값 값</InfoBox>")
+      expect(result).toContain("<InfoBox>a b</InfoBox>")
     })
 
-    it("MDX JSX 내부 fenced code block 줄바꿈은 보존해야 함", async () => {
-      const input = `<Tabs>
-  <TabsContent value={"header"} label={'헤더'}>
-    \`\`\`
-    code영역
-    code영역
-    code영역
-    code영역
-    code영역
-    \`\`\`
-  </TabsContent>
-  <TabsContent value={"payload"} label={'페이로드'}>탭제목 2의 컨텐츠</TabsContent>
-</Tabs>`
+    it("keeps the line breaks of a backtick fenced block inside JSX", async () => {
+      const input = [
+        "<Tabs>",
+        '  <TabsContent value={"header"} label={"Header"}>',
+        "    ```",
+        "    line one",
+        "    line two",
+        "    ```",
+        "  </TabsContent>",
+        "</Tabs>",
+      ].join("\n")
       const result = await formatWithPlugin(input, "mdx")
 
-      expect(result).toContain(`\`\`\`
-    code영역
-    code영역
-    code영역
-    code영역
-    code영역
-    \`\`\``)
-      expect(result).not.toContain("``` code영역")
+      expect(result).toContain("    ```\n    line one\n    line two\n    ```")
+      expect(result).not.toContain("``` line one")
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
     })
-  })
 
-  describe("5. 파서 호환성", () => {
-    it("마크다운 파서", async () => {
-      const input = "| A | B |\n| --- | --- |\n| 1 | 2 |"
-      const result = await formatWithPlugin(input, "markdown")
-      expectTableStructure(result, ["| A | B |"])
-    })
-
-    it("MDX 파서", async () => {
-      const input =
-        "| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<Button>클릭</Button>"
+    it("keeps the line breaks of a tilde fenced block inside JSX", async () => {
+      const input = [
+        "<Tabs>",
+        '  <TabsContent value={"header"} label={"Header"}>',
+        "    ~~~",
+        "    line one",
+        "    line two",
+        "    ~~~",
+        "  </TabsContent>",
+        "</Tabs>",
+      ].join("\n")
       const result = await formatWithPlugin(input, "mdx")
-      expectTableStructure(result, ["| A | B |"])
-      expect(result).toContain("<Button>클릭</Button>")
+
+      expect(result).toContain("    ~~~\n    line one\n    line two\n    ~~~")
+      await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
+    })
+
+    it("keeps a fenced block closed by a longer fence", async () => {
+      const input = [
+        "<Tabs>",
+        '  <TabsContent value={"header"} label={"Header"}>',
+        "    ```js",
+        "    const a = 1",
+        "    ````",
+        "  </TabsContent>",
+        "</Tabs>",
+      ].join("\n")
+      const result = await formatWithPlugin(input, "mdx")
+
+      expect(result).toContain("    const a = 1")
     })
   })
 
-  describe("6. 통합 시나리오", () => {
+  describe("5. parsers", () => {
+    it("markdown", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | 2 |",
+        "markdown"
+      )
+      expectTableStructure(result, ["| A | B |"])
+    })
+
+    it("mdx", async () => {
+      const result = await formatWithPlugin(
+        "| A | B |\n| --- | --- |\n| 1 | 2 |\n\n<Button>Click</Button>",
+        "mdx"
+      )
+      expectTableStructure(result, ["| A | B |"])
+      expect(result).toContain("<Button>Click</Button>")
+    })
+  })
+
+  describe("6. whole documents", () => {
     integrationTestCases.forEach((testCase) => {
       it(testCase.name, async () => {
         const result = await formatWithPlugin(testCase.input)
@@ -237,77 +298,124 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
           expect(result).toContain(expected)
         })
 
-        // 종합적인 검증
         if (result.includes("{/*")) {
-          expectMdxCommentPreservation(result, ["{/* API 호출 예시 */}"])
+          expectMdxCommentPreservation(result, ["{/* request sample */}"])
         }
         if (result.includes("|")) {
           expectTableAlignment(result)
         }
       })
     })
-  })
 
-  describe("7. 에지 케이스", () => {
-    it("빈 입력", async () => {
-      const result = await formatWithPlugin("")
-      expect(result.trim()).toBe("")
-    })
-
-    it("공백만 있는 입력", async () => {
-      const result = await formatWithPlugin("   \n   \n   ")
-      expect(result.trim()).toBe("")
-    })
-
-    it("복잡한 혼합 콘텐츠", async () => {
-      const input = `# 제목
-
-{/* 주석 */}
-
-| 헤더 | 내용<br>서브 |
-| --- | --- |
-| **굵게** | \`코드\` |
-
-<InfoBox type="note">
-정보박스
-</InfoBox>
-
-동의 항목 확인`
+    it("mixes headings, comments, tables and JSX without disturbing them", async () => {
+      const input = [
+        "# Title",
+        "",
+        "{/* comment */}",
+        "",
+        // A bare `<br>` is not valid JSX, so an MDX document has to close it.
+        "| Head | Body<br />Sub |",
+        "| --- | --- |",
+        "| **bold** | `code` |",
+        "",
+        '<InfoBox type="note">',
+        "Info box",
+        "</InfoBox>",
+        "",
+        "Closing paragraph",
+      ].join("\n")
 
       const result = await formatWithPlugin(input, "mdx")
 
-      expect(result).toContain("# 제목")
-      expectMdxCommentPreservation(result, ["{/* 주석 */}"])
-      expectTableStructure(result, ["| 헤더 | 내용<br>서브 |"])
+      expect(result).toContain("# Title")
+      expectMdxCommentPreservation(result, ["{/* comment */}"])
+      expectTableStructure(result, ["| Head | Body<br />Sub |"])
       expect(result).toContain('<InfoBox type="note">')
-      expect(result).toContain("동의 항목 확인")
+      expect(result).toContain("Closing paragraph")
+      await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
     })
 
-    it("매우 긴 테이블", async () => {
-      const longTableInput = `| ${"A".repeat(100)} | ${"B".repeat(100)} |
-| --- | --- |
-| ${"데이터1".repeat(50)} | ${"데이터2".repeat(50)} |`
+    it("compacts a table nested in a list item", async () => {
+      const input = [
+        "- Step one",
+        "",
+        "  | A  | B |",
+        "  | --- | --- |",
+        "  | 1 | 2 |",
+        "",
+        "- Step two",
+      ].join("\n")
+      const result = await formatWithPlugin(input)
 
-      const result = await formatWithPlugin(longTableInput)
-      expectTableStructure(result, [
-        `| ${"A".repeat(100)} | ${"B".repeat(100)} |`,
-      ])
+      expect(result).toContain("| A | B |")
+      expect(result).toContain("- Step two")
+      await expectIdempotent(input)
+    })
+
+    it("compacts a table nested in a blockquote", async () => {
+      const input = ["> | A  | B |", "> | --- | --- |", "> | 1 | 2 |"].join(
+        "\n"
+      )
+      const result = await formatWithPlugin(input)
+
+      expect(result).toContain("| A | B |")
+      await expectIdempotent(input)
+    })
+
+    it("leaves an empty document empty", async () => {
+      expect((await formatWithPlugin("")).trim()).toBe("")
+    })
+
+    it("leaves a whitespace-only document empty", async () => {
+      expect((await formatWithPlugin("   \n   \n   ")).trim()).toBe("")
+    })
+
+    it("keeps a very wide table on one line per row", async () => {
+      const wide = "A".repeat(100)
+      const input = [
+        `| ${wide} | ${wide} |`,
+        "| --- | --- |",
+        `| ${"x".repeat(200)} | ${"y".repeat(200)} |`,
+      ].join("\n")
+      const result = await formatWithPlugin(input)
+
+      expect(result.trim()).toBe(input)
     })
   })
 
-  describe("8. HTML 테이블 보존", () => {
-    it("HTML table 은 원문 그대로 보존", async () => {
+  describe("7. HTML blocks", () => {
+    it("keeps an HTML table as written", async () => {
       const input = "<table><tr><td>a<br>b</td></tr></table>"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result.trim()).toBe(input)
+    })
+
+    it("keeps an HTML table fragment that opens with a row", async () => {
+      const input = "<tr><td>a  b</td></tr>"
+      const result = await formatWithPlugin(input, "markdown")
+
+      expect(result.trim()).toBe(input)
+    })
+
+    it("keeps a multi line HTML table as written", async () => {
+      const input = [
+        "<table>",
+        "  <thead>",
+        "    <tr><th>A</th></tr>",
+        "  </thead>",
+        "</table>",
+      ].join("\n")
       const result = await formatWithPlugin(input, "markdown")
 
       expect(result.trim()).toBe(input)
     })
   })
 
-  describe("9. 실문서 기반 표 회귀 테스트", () => {
-    const realWorldTableFixtures = [
+  describe("8. tables taken from real documents", () => {
+    const fixtures = [
       {
-        name: "에러 코드 표의 링크와 장문 셀을 유지해야 함",
+        name: "error code table keeps its links and long cells",
         filename: "real-error-code-table.mdx",
         expectedLines: [
           "| Error Code | Status Code | Cause | Solution |",
@@ -315,7 +423,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
         ],
       },
       {
-        name: "앱 설정 표의 강조와 링크를 유지해야 함",
+        name: "app setting table keeps its emphasis and links",
         filename: "real-app-setting-table.mdx",
         expectedLines: [
           "| Setting item | Allowed target | Usage example |",
@@ -323,7 +431,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
         ],
       },
       {
-        name: "채널 안내 표의 인라인 코드와 긴 링크를 유지해야 함",
+        name: "channel method table keeps its code spans and long links",
         filename: "real-channel-method-table.mdx",
         expectedLines: [
           "| Implementation method | Method name | Service page retention | Result check |",
@@ -331,7 +439,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
         ],
       },
       {
-        name: "브라우저 지원 표의 마크다운 이스케이프 성격 문자를 유지해야 함",
+        name: "browser support table keeps characters Markdown would escape",
         filename: "real-browser-support-table.mdx",
         expectedLines: [
           "| Chrome* | O | O | O | O |",
@@ -340,7 +448,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       },
     ]
 
-    realWorldTableFixtures.forEach((fixture) => {
+    fixtures.forEach((fixture) => {
       it(fixture.name, async () => {
         const input = readFixture(fixture.filename)
         const result = await formatWithPlugin(input, "mdx")
@@ -350,9 +458,13 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
           expect(result).toContain(line)
         })
       })
+
+      it(`${fixture.name}, formatted twice`, async () => {
+        await expectIdempotent(readFixture(fixture.filename), "mdx")
+      })
     })
 
-    it("기본 Prettier보다 표 셀의 의미 있는 마크다운 문자를 더 잘 보존해야 함", async () => {
+    it("keeps asterisks that the built-in printer escapes", async () => {
       const input = readFixture("real-browser-support-table.mdx")
       const baseResult = await formatWithoutPlugin(input, "mdx")
       const pluginResult = await formatWithPlugin(input, "mdx")
@@ -367,8 +479,8 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
     })
   })
 
-  describe("10. 실문서 기반 MDX 회귀 테스트", () => {
-    it("주석 처리된 JSX 블록은 원문 그대로 보존해야 함", async () => {
+  describe("9. MDX taken from real documents", () => {
+    it("keeps a commented-out JSX block as written", async () => {
       const input = readFixture("commented-jsx-table.mdx")
       const result = await formatWithPlugin(input, "mdx")
 
@@ -380,7 +492,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
     })
 
-    it("기본 Prettier보다 주석 처리된 JSX 블록을 더 안전하게 보존해야 함", async () => {
+    it("keeps a commented-out JSX block that the built-in printer escapes", async () => {
       const input = readFixture("commented-jsx-table.mdx")
       const baseResult = await formatWithoutPlugin(input, "mdx")
       const pluginResult = await formatWithPlugin(input, "mdx")
@@ -391,7 +503,7 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
       await expect(compile(pluginResult, { jsx: true })).resolves.toBeTruthy()
     })
 
-    it("실문서 형태의 Tabs/DocDataEmbed 구조를 유지해야 함", async () => {
+    it("keeps a Tabs and DocDataEmbed structure as written", async () => {
       const input = readFixture("real-tabs-docdataembed.mdx")
       const result = await formatWithPlugin(input, "mdx")
 
@@ -403,6 +515,15 @@ describe("prettier-plugin-markdown-compact-tables 종합 테스트", () => {
         '<DocDataEmbed href="/docs/en/message-share/callback" type="infoApiMethodUrlDescription" />'
       )
       await expect(compile(result, { jsx: true })).resolves.toBeTruthy()
+    })
+
+    it("keeps every fixture stable when formatted twice", async () => {
+      for (const filename of [
+        "commented-jsx-table.mdx",
+        "real-tabs-docdataembed.mdx",
+      ]) {
+        await expectIdempotent(readFixture(filename), "mdx")
+      }
     })
   })
 })
