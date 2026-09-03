@@ -249,6 +249,75 @@ describe("prettier-plugin-markdown-compact-tables unit behavior", () => {
       expect(result).toContain("\\*/}")
     })
 
+    // Comment markers only count outside code. A `{/*` in a code sample used to
+    // pair with an unrelated `*/}` further down, and the tables between the two
+    // were then treated as commented-out content: left uncompacted at best, and
+    // at worst stripped of a real closing pipe that happened to sit after a
+    // `*/}` in a cell.
+    describe("comment markers that are only code", () => {
+      const table = "| A  | B |\n| --- | --- |\n| 1 | 2 |"
+      const compacted = "| A | B |\n| --- | --- |\n| 1 | 2 |"
+
+      const cases = [
+        [
+          "opener in a fenced block, closer in later prose",
+          '```js\nconst a = "{/*"\n```\n\n' + table + "\n\ntext */} end",
+        ],
+        [
+          "opener in a tilde fence, closer in later prose",
+          "~~~\n{/*\n~~~\n\n" + table + "\n\n*/} end",
+        ],
+        [
+          "opener and closer in code spans",
+          "`{/*` opens\n\n" + table + "\n\n`*/}` closes",
+        ],
+        [
+          "opener in a multi-backtick code span",
+          "``a {/* b`` opens\n\n" + table + "\n\n*/} end",
+        ],
+      ]
+
+      cases.forEach(([name, input]) => {
+        it(`still compacts the table when the ${name}`, async () => {
+          const result = await formatWithPlugin(input, "markdown")
+
+          expect(result).toContain(compacted)
+          await expectIdempotent(input, "markdown")
+        })
+      })
+
+      it("keeps a closing pipe that follows a comment close in a cell", async () => {
+        const input =
+          '```js\nconst a = "{/*"\n```\n\n| A | B |\n| --- | --- |\n| x | */} |'
+        const result = await formatWithPlugin(input, "markdown")
+
+        expect(result).toContain("| x | */} |")
+        await expectIdempotent(input, "markdown")
+      })
+
+      it("still treats a real comment as a comment", async () => {
+        // The fix must not stop the plugin from recognising comment syntax that
+        // sits in ordinary content, fenced code inside the comment included.
+        const input = [
+          "{/*",
+          "",
+          "```js",
+          "x",
+          "```",
+          "",
+          "| A  | B |",
+          "| --- | --- |",
+          "| 1 | 2 |",
+          "",
+          "*/}",
+        ].join("\n")
+        const result = await formatWithPlugin(input, "markdown")
+
+        expect(result.trim()).toBe(input)
+        await expectIdempotent(input, "markdown")
+      })
+    })
+
     it("keeps an MDX/JSX element as written", async () => {
       const result = await formatWithPlugin(
         '<Button type="primary">Click</Button>',

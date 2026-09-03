@@ -56,6 +56,86 @@ const replaceCodeSpans = (input, replace) => {
   return result
 }
 
+const isSingleCharSequence = (value, ch) =>
+  value.length > 0 && value.split("").every((c) => c === ch)
+
+// `{/*` and `*/}` inside a code span or a fenced code block are characters a
+// reader sees, not comment markers. Scanning for them without excluding code
+// lets a `{/*` in a code sample pair with an unrelated `*/}` further down, and
+// every table between the two is then mistaken for commented-out content. The
+// mask blanks code regions while keeping the document's length, so the offsets
+// the scan reports still index the original source.
+const maskCodeRegions = (input) => {
+  const chars = input.split("")
+  const blank = (from, to) => {
+    for (let i = from; i < to; i += 1) {
+      if (chars[i] !== "\n" && chars[i] !== "\r") chars[i] = " "
+    }
+  }
+
+  let lineStart = 0
+  let openFence = null
+
+  while (lineStart <= input.length) {
+    const newlineIdx = input.indexOf("\n", lineStart)
+    const lineEnd = newlineIdx === -1 ? input.length : newlineIdx
+    const line = input.slice(lineStart, lineEnd)
+
+    if (openFence) {
+      blank(lineStart, lineEnd)
+      const close = line.match(/^\s*([`~]{3,})\s*$/)?.[1]
+      if (
+        close &&
+        close[0] === openFence.char &&
+        isSingleCharSequence(close, openFence.char) &&
+        close.length >= openFence.length
+      ) {
+        openFence = null
+      }
+    } else {
+      const openMatch = line.match(/^\s*([`~]{3,})(.*)$/)
+      const fence = openMatch?.[1]
+      // A backtick fence cannot carry backticks in its info string.
+      const infoIsValid = !(fence?.[0] === "`" && openMatch[2].includes("`"))
+      if (fence && isSingleCharSequence(fence, fence[0]) && infoIsValid) {
+        openFence = { char: fence[0], length: fence.length }
+        blank(lineStart, lineEnd)
+      }
+    }
+
+    if (newlineIdx === -1) break
+    lineStart = newlineIdx + 1
+  }
+
+  // Inline code spans, scanned over the text whose fences are already blank so
+  // that a backtick inside a code block cannot open a span.
+  const afterFences = chars.join("")
+  let i = 0
+  while (i < afterFences.length) {
+    if (afterFences[i] !== "`") {
+      i += 1
+      continue
+    }
+
+    let ticks = 1
+    while (i + ticks < afterFences.length && afterFences[i + ticks] === "`") {
+      ticks += 1
+    }
+
+    const delimiter = "`".repeat(ticks)
+    const end = afterFences.indexOf(delimiter, i + ticks)
+    if (end === -1) {
+      i += 1
+      continue
+    }
+
+    blank(i, end + ticks)
+    i = end + ticks
+  }
+
+  return chars.join("")
+}
+
 // The printer asks for the same document's ranges once per node, so caching the
 // most recent input covers every repeat within a format run. A map keyed by the
 // document text would never release the documents it has seen, which matters
@@ -67,12 +147,13 @@ const getMdxCommentRanges = (input) => {
   if (!input) return []
   if (input === cachedRangesInput) return cachedRanges
 
+  const scanned = maskCodeRegions(input)
   const ranges = []
   let idx = 0
-  while (idx < input.length) {
-    const start = input.indexOf("{/*", idx)
+  while (idx < scanned.length) {
+    const start = scanned.indexOf("{/*", idx)
     if (start === -1) break
-    const end = input.indexOf("*/}", start + 3)
+    const end = scanned.indexOf("*/}", start + 3)
     if (end === -1) break
     ranges.push({ start, end: end + 3 })
     idx = end + 3
@@ -116,9 +197,6 @@ const isHtmlTable = (raw) =>
   /<tr[\s>]/i.test(raw) ||
   /<td[\s>]/i.test(raw) ||
   /<th[\s>]/i.test(raw)
-
-const isSingleCharSequence = (value, ch) =>
-  value.length > 0 && value.split("").every((c) => c === ch)
 
 const hasFencedCodeBlock = (raw) => {
   if (typeof raw !== "string" || !raw.includes("\n")) return false
@@ -261,6 +339,18 @@ export const unwrapTableCellRaw = (raw) => {
   return trimAsciiSpace(out)
 }
 
+// A node of one of these types may carry MDX comment syntax in its source, in
+// which case it is printed verbatim. The set is built once: the check below runs
+// for every node of every document.
+const MDX_COMMENT_TARGET_TYPES = new Set([
+  "paragraph",
+  "heading",
+  "text",
+  "emphasis",
+  "strong",
+  "inlineCode",
+])
+
 function compactTablesPrint(path, options, print) {
   const node = path.node
 
@@ -282,22 +372,16 @@ function compactTablesPrint(path, options, print) {
   }
 
   if (node?.type === "tableRow" && slice) {
-    return normalizeCellText(slice.raw.replace(/([^|\s])(\s+)(\|)/g, "$1$3"))
+    // `normalizeCellText` ends in `dropSpaceBeforeClosingPipe`, which strips the
+    // padding in front of every pipe, so the row needs no separate pass.
+    return normalizeCellText(slice.raw)
   }
 
   if (node?.type === "tableCell" && slice) {
     return normalizeCellText(unwrapTableCellRaw(slice.raw))
   }
 
-  const mdxCommentTargetTypes = [
-    "paragraph",
-    "heading",
-    "text",
-    "emphasis",
-    "strong",
-    "inlineCode",
-  ]
-  if (mdxCommentTargetTypes.includes(node?.type) && slice) {
+  if (MDX_COMMENT_TARGET_TYPES.has(node?.type) && slice) {
     if (/\{\/\*|\*\/\}/.test(slice.raw)) {
       return slice.raw
     }
