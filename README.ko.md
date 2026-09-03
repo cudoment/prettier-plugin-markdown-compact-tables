@@ -303,6 +303,10 @@ npm run format
 
 `.github/workflows/ci.yml`의 GitHub Actions 워크플로는 같은 테스트를 Node.js 18, 20, 22에서 실행하고, 지원하는 Prettier 마이너 버전마다 한 번씩 더 실행합니다.
 
+### 배포
+
+배포는 `main`에서 버전을 올리는 것으로 시작합니다. `package.json`의 `version`을 올려서 푸시하면, `.github/workflows/publish.yml` 워크플로가 그 버전을 npm에 올라간 버전과 비교합니다. 새 버전이면 테스트를 실행한 뒤 npm trusted publishing으로 출처 증명을 붙여 배포하고, 같은 이름의 `v*` 태그와 GitHub 릴리스를 만듭니다. 버전이 그대로면 아무것도 배포하지 않습니다.
+
 ## 라이선스
 
 [MIT](./LICENSE)

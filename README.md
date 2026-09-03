@@ -301,6 +301,10 @@ The tests are written with [Vitest](https://vitest.dev) and live in `__tests__/`
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs the same suite on Node.js 18, 20 and 22, and once more against each supported Prettier minor release.
 
+### Releasing
+
+A release is a version bump on `main`: raise `version` in `package.json` and push. The workflow in `.github/workflows/publish.yml` compares that version with the one on npm, and when it is new it runs the tests, publishes the package with provenance through npm trusted publishing, and creates the matching `v*` tag and GitHub release. Nothing is published while the version stays the same.
+
 ## License
 
 [MIT](./LICENSE)
